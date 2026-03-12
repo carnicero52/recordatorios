@@ -9,81 +9,70 @@ datasource db {
 
 // Configuración del sistema
 model Configuracion {
-  id              String   @id @default(cuid())
-
-  // Configuración general
-  nombreSistema   String   @default("Sistema de Recordatorios")
+  id                String   @id @default(cuid())
+  nombreSistema     String   @default("Sistema de Recordatorios")
 
   // Gmail SMTP
-  gmailEmail      String?
-  gmailPassword   String?
-  gmailActivo     Boolean  @default(false)
+  gmailEmail        String?
+  gmailPassword     String?
+  gmailActivo       Boolean  @default(false)
 
   // Telegram Bot
-  telegramBotToken String?
-  telegramActivo   Boolean @default(false)
+  telegramBotToken  String?
+  telegramActivo    Boolean  @default(false)
 
-  // SMS (Twilio)
+  // Twilio SMS
   twilioAccountSid  String?
   twilioAuthToken   String?
   twilioPhoneNumber String?
-  smsActivo         Boolean @default(false)
+  smsActivo         Boolean  @default(false)
 
-  // Configuración de horario
-  horaEjecucion     String  @default("00:00")
+  // Horario de ejecución
+  horaEjecucion     String   @default("09:00")
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 // Recordatorios
 model Recordatorio {
-  id                  String   @id @default(cuid())
+  id                String   @id @default(cuid())
 
-  // Campos principales
-  nombre              String
-  correo              String
-  fechaRecordatorio   DateTime
-  asunto              String
-  mensaje             String
+  nombre            String
+  correo            String
+  fechaRecordatorio DateTime
+  asunto            String
+  mensaje           String
 
-  // Canales adicionales
-  telegramId          String?
-  numeroTelefono      String?
+  telegramId        String?
+  numeroTelefono    String?
 
-  // Estado
-  estado              String   @default("pendiente")
-  ultimoIntento       DateTime?
-  errorMensaje        String?
+  estado            String   @default("pendiente")
+  ultimoIntento     DateTime?
+  errorMensaje      String?
 
-  // Configuración de envío
-  enviarEmail         Boolean  @default(true)
-  enviarTelegram      Boolean  @default(false)
-  enviarSMS           Boolean  @default(false)
+  enviarEmail       Boolean  @default(true)
+  enviarTelegram    Boolean  @default(false)
+  enviarSMS         Boolean  @default(false)
 
-  // Repetición
-  repetir             Boolean  @default(false)
-  frecuencia          String?
+  repetir           Boolean  @default(false)
+  frecuencia        String?
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  // Relación con historial
-  envios              Envio[]
+  envios            Envio[]
 }
 
 // Historial de envíos
 model Envio {
   id              String   @id @default(cuid())
-
   recordatorioId  String
   recordatorio    Recordatorio @relation(fields: [recordatorioId], references: [id], onDelete: Cascade)
-
   canal           String
   destinatario    String
   estado          String
   error           String?
-
   enviadoAt       DateTime @default(now())
 }
 
@@ -95,6 +84,5 @@ model Admin {
   nombre    String
   rol       String   @default("admin")
   activo    Boolean  @default(true)
-
   createdAt DateTime @default(now())
 }

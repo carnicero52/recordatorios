@@ -1,127 +1,64 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { createHash } from 'crypto';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
-// Función para hashear contraseña
-function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
-}
+const JWT_SECRET = process.env.JWT_SECRET || 'recordatorios-secret-key-2024';
 
-// POST - Login de admin
-export async function POST(request: NextRequest) {
+// Login
+export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { username, password } = body;
+    const { username, password } = await request.json();
 
-    if (!username || !password) {
-      return NextResponse.json(
-        { error: 'Username y password son requeridos' },
-        { status: 400 }
-      );
+    const admin = await db.admin.findUnique({ where: { username } });
+
+    if (!admin || !(await bcrypt.compare(password, admin.password))) {
+      return NextResponse.json({ success: false, error: 'Credenciales incorrectas' }, { status: 401 });
     }
 
-    // Buscar admin
-    let admin = await db.admin.findFirst({
-      where: { username, activo: true }
-    });
-
-    // Si no existe ningún admin, crear el admin inicial
-    if (!admin) {
-      const adminCount = await db.admin.count();
-      if (adminCount === 0) {
-        admin = await db.admin.create({
-          data: {
-            username: 'admin',
-            password: hashPassword('admin123'),
-            nombre: 'Administrador',
-            activo: true
-          }
-        });
-      }
+    if (!admin.activo) {
+      return NextResponse.json({ success: false, error: 'Usuario inactivo' }, { status: 403 });
     }
 
-    if (!admin) {
-      return NextResponse.json(
-        { error: 'Credenciales inválidas' },
-        { status: 401 }
-      );
-    }
-
-    // Verificar contraseña (soportar hash y texto plano para retrocompatibilidad)
-    const hashedPassword = hashPassword(password);
-    const passwordMatch = admin.password === hashedPassword || admin.password === password;
-
-    if (!passwordMatch) {
-      return NextResponse.json(
-        { error: 'Credenciales inválidas' },
-        { status: 401 }
-      );
-    }
-
-    // Generar token simple
-    const token = Buffer.from(`${admin.id}:${Date.now()}`).toString('base64');
+    const token = jwt.sign(
+      { id: admin.id, username: admin.username, rol: admin.rol },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     return NextResponse.json({
       success: true,
       token,
-      admin: {
-        id: admin.id,
-        username: admin.username,
-        nombre: admin.nombre,
-        email: admin.email
-      }
+      admin: { id: admin.id, nombre: admin.nombre, username: admin.username, rol: admin.rol }
     });
   } catch (error) {
-    console.error('Error en login:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+    console.error('Error en auth:', error);
+    return NextResponse.json({ success: false, error: 'Error del servidor' }, { status: 500 });
   }
 }
 
-// GET - Verificar token
-export async function GET(request: NextRequest) {
+// Verificar token
+export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
-    const token = authHeader?.replace('Bearer ', '');
-
-    if (!token) {
-      return NextResponse.json(
-        { valid: false, error: 'Token no proporcionado' },
-        { status: 401 }
-      );
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ valid: false }, { status: 401 });
     }
 
-    // Decodificar token
-    const decoded = Buffer.from(token, 'base64').toString('utf-8');
-    const [adminId] = decoded.split(':');
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
 
-    const admin = await db.admin.findFirst({
-      where: { id: adminId, activo: true }
+    const admin = await db.admin.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, nombre: true, username: true, rol: true }
     });
 
     if (!admin) {
-      return NextResponse.json(
-        { valid: false, error: 'Token inválido' },
-        { status: 401 }
-      );
+      return NextResponse.json({ valid: false }, { status: 401 });
     }
 
-    return NextResponse.json({
-      valid: true,
-      admin: {
-        id: admin.id,
-        username: admin.username,
-        nombre: admin.nombre,
-        email: admin.email
-      }
-    });
-  } catch (error) {
-    console.error('Error verificando token:', error);
-    return NextResponse.json(
-      { valid: false, error: 'Token inválido' },
-      { status: 401 }
-    );
+    return NextResponse.json({ valid: true, admin });
+  } catch {
+    return NextResponse.json({ valid: false }, { status: 401 });
   }
 }

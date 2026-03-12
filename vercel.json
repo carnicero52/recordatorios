@@ -1,7 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "bun run vercel-build",
+  "buildCommand": "bun run build",
   "installCommand": "bun install",
   "framework": "nextjs",
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron?secret=recordatorios-cron-2024",
+      "schedule": "0 9 * * *"
+    }
+  ]
 }

@@ -1,1617 +1,432 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Bell, Users, Tag, Settings, History, LogOut, Menu, X, 
-  Plus, Edit, Trash2, Send, Check, AlertCircle, Clock,
-  Mail, MessageSquare, TrendingUp, Calendar, DollarSign,
-  ChevronDown, Search, Eye, EyeOff, Save, RefreshCw
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { Bell, Settings, LogOut, Plus, X, Mail, Phone, Calendar, Clock, Search, Edit, Send, MessageSquare, Trash2, Play, Check, Zap } from 'lucide-react';
 
-// Types
-interface Admin {
+// ========== TIPOS ==========
+interface Config {
   id: string;
-  username: string;
-  nombre: string;
-  email?: string;
+  nombreSistema: string;
+  horaEjecucion: string;
+  gmailEmail: string;
+  gmailActivo: boolean;
+  gmailConfigurado: boolean;
+  telegramActivo: boolean;
+  telegramConfigurado: boolean;
+  smsActivo: boolean;
+  smsConfigurado: boolean;
+  twilioPhoneNumber: string;
 }
 
-interface Usuario {
+interface Recordatorio {
   id: string;
   nombre: string;
-  email: string;
-  telefono?: string;
-  telegramId?: string;
-  rol: string;
-  recibirEmail: boolean;
-  recibirTelegram: boolean;
-  activo: boolean;
-  _count?: { alertas: number };
-}
-
-interface Categoria {
-  id: string;
-  nombre: string;
-  descripcion?: string;
-  color: string;
-  icono: string;
-  _count?: { alertas: number };
-}
-
-interface Alerta {
-  id: string;
-  titulo: string;
-  descripcion?: string;
-  monto?: number;
-  tipo: string;
-  fechaVencimiento?: string;
+  correo: string;
+  fechaRecordatorio: string;
+  asunto: string;
+  mensaje: string;
+  telegramId: string | null;
+  numeroTelefono: string | null;
   estado: string;
-  prioridad: string;
-  repetir: boolean;
-  frecuencia?: string;
-  usuarioId: string;
-  categoriaId?: string;
-  usuario?: Usuario;
-  categoria?: Categoria;
-  _count?: { notificaciones: number };
-  createdAt: string;
+  enviarEmail: boolean;
+  enviarTelegram: boolean;
+  enviarSMS: boolean;
+  envios?: Envio[];
 }
 
-interface Notificacion {
+interface Envio {
   id: string;
   canal: string;
   destinatario: string;
   estado: string;
-  error?: string;
-  asunto?: string;
-  mensaje: string;
-  alerta?: { id: string; titulo: string; tipo: string; prioridad: string };
-  usuario?: { id: string; nombre: string; email: string };
-  createdAt: string;
+  error: string | null;
+  enviadoAt: string;
 }
 
-interface Configuracion {
-  id: string;
-  nombreNegocio: string;
-  logoUrl?: string;
-  emailRemitente?: string;
-  emailPassword?: string;
-  emailActivo: boolean;
-  telegramBotToken?: string;
-  telegramChatId?: string;
-  telegramActivo: boolean;
-  diasAnticipacion: number;
-  enviarRecordatorios: boolean;
-}
+// ========== HELPERS ==========
+const setToken = (t: string) => { try { localStorage.setItem('token', t); } catch {} };
+const getToken = () => { try { return localStorage.getItem('token'); } catch { return null; } };
+const removeToken = () => { try { localStorage.removeItem('token'); } catch {} };
 
-type Vista = 'login' | 'dashboard' | 'alertas' | 'usuarios' | 'categorias' | 'configuracion' | 'historial';
+const formatearFecha = (f: string) => new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const esHoy = (f: string) => new Date().toDateString() === new Date(f).toDateString();
 
-export default function Page() {
-  // Estados principales
-  const [vista, setVista] = useState<Vista>('login');
-  const [token, setToken] = useState<string | null>(null);
-  const [admin, setAdmin] = useState<Admin | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  
-  // Estados de datos
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [alertas, setAlertas] = useState<Alerta[]>([]);
-  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
-  const [configuracion, setConfiguracion] = useState<Configuracion | null>(null);
-  
-  // Estados de formularios
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [showPassword, setShowPassword] = useState(false);
-  
-  // Estados de modales
-  const [modalUsuario, setModalUsuario] = useState(false);
-  const [modalCategoria, setModalCategoria] = useState(false);
-  const [modalAlerta, setModalAlerta] = useState(false);
-  const [modalConfirmar, setModalConfirmar] = useState(false);
-  
-  // Estados de edición
-  const [editandoUsuario, setEditandoUsuario] = useState<Usuario | null>(null);
-  const [editandoCategoria, setEditandoCategoria] = useState<Categoria | null>(null);
-  const [editandoAlerta, setEditandoAlerta] = useState<Alerta | null>(null);
-  const [eliminando, setEliminando] = useState<{ tipo: string; id: string } | null>(null);
-  
-  // Estados de filtros
-  const [filtroEstado, setFiltroEstado] = useState<string>('');
-  const [filtroTipo, setFiltroTipo] = useState<string>('');
-  const [busqueda, setBusqueda] = useState('');
-  
-  // Estadísticas del dashboard
-  const [stats, setStats] = useState({
-    pendientes: 0,
-    enviadasHoy: 0,
-    usuariosActivos: 0
-  });
+// ========== APP ==========
+export default function App() {
+  const [config, setConfig] = useState<Config | null>(null);
+  const [recordatorios, setRecordatorios] = useState<Recordatorio[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [vista, setVista] = useState<'login' | 'dashboard'>('login');
+  const [seccion, setSeccion] = useState<'recordatorios' | 'historial' | 'config'>('recordatorios');
 
-  // Verificar token guardado al cargar
-  useEffect(() => {
-    const savedToken = localStorage.getItem('adminToken');
-    if (savedToken) {
-      verificarToken(savedToken);
-    }
-  }, []);
-
-  // Cargar datos cuando cambia la vista
-  useEffect(() => {
-    if (token && vista !== 'login') {
-      switch (vista) {
-        case 'dashboard':
-          cargarDashboard();
-          break;
-        case 'alertas':
-          cargarAlertas();
-          cargarUsuarios();
-          cargarCategorias();
-          break;
-        case 'usuarios':
-          cargarUsuarios();
-          break;
-        case 'categorias':
-          cargarCategorias();
-          break;
-        case 'configuracion':
-          cargarConfiguracion();
-          break;
-        case 'historial':
-          cargarNotificaciones();
-          break;
-      }
-    }
-  }, [vista, token]);
-
-  // Funciones de autenticación
-  const verificarToken = async (savedToken: string) => {
+  const cargar = async () => {
     try {
-      const res = await fetch('/api/auth', {
-        headers: { Authorization: `Bearer ${savedToken}` }
-      });
-      const data = await res.json();
-      if (data.valid) {
-        setToken(savedToken);
-        setAdmin(data.admin);
-        setVista('dashboard');
-      } else {
-        localStorage.removeItem('adminToken');
-      }
-    } catch {
-      localStorage.removeItem('adminToken');
-    }
+      const [c, r] = await Promise.all([fetch('/api/configuracion'), fetch('/api/recordatorios')]);
+      setConfig(await c.json());
+      setRecordatorios(await r.json());
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
-  const login = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginForm)
-      });
-      const data = await res.json();
-      if (data.success) {
-        setToken(data.token);
-        setAdmin(data.admin);
-        localStorage.setItem('adminToken', data.token);
-        setVista('dashboard');
-        setLoginForm({ username: '', password: '' });
-      } else {
-        alert(data.error || 'Error al iniciar sesión');
-      }
-    } catch {
-      alert('Error de conexión');
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => { if (getToken()) { setVista('dashboard'); cargar(); } else setLoading(false); }, []);
+  useEffect(() => { if (vista === 'dashboard') cargar(); }, [seccion]);
 
-  const logout = () => {
-    setToken(null);
-    setAdmin(null);
-    localStorage.removeItem('adminToken');
-    setVista('login');
-  };
-
-  // Funciones de carga de datos
-  const cargarDashboard = async () => {
-    await Promise.all([cargarAlertas(), cargarUsuarios()]);
-    // Calcular estadísticas
-    setStats({
-      pendientes: alertas.filter(a => a.estado === 'pendiente').length,
-      enviadasHoy: alertas.filter(a => a.estado === 'enviado').length,
-      usuariosActivos: usuarios.filter(u => u.activo).length
-    });
-  };
-
-  const cargarUsuarios = async () => {
-    try {
-      const res = await fetch('/api/usuarios');
-      const data = await res.json();
-      setUsuarios(data);
-    } catch (error) {
-      console.error('Error cargando usuarios:', error);
-    }
-  };
-
-  const cargarCategorias = async () => {
-    try {
-      const res = await fetch('/api/categorias');
-      const data = await res.json();
-      setCategorias(data);
-    } catch (error) {
-      console.error('Error cargando categorías:', error);
-    }
-  };
-
-  const cargarAlertas = async () => {
-    try {
-      let url = '/api/alertas?';
-      if (filtroEstado) url += `estado=${filtroEstado}&`;
-      if (filtroTipo) url += `tipo=${filtroTipo}&`;
-      const res = await fetch(url);
-      const data = await res.json();
-      setAlertas(data);
-      
-      // Actualizar stats
-      setStats({
-        pendientes: data.filter((a: Alerta) => a.estado === 'pendiente').length,
-        enviadasHoy: data.filter((a: Alerta) => a.estado === 'enviado').length,
-        usuariosActivos: usuarios.filter(u => u.activo).length
-      });
-    } catch (error) {
-      console.error('Error cargando alertas:', error);
-    }
-  };
-
-  const cargarNotificaciones = async () => {
-    try {
-      const res = await fetch('/api/notificaciones/historial?limit=100');
-      const data = await res.json();
-      setNotificaciones(data);
-    } catch (error) {
-      console.error('Error cargando notificaciones:', error);
-    }
-  };
-
-  const cargarConfiguracion = async () => {
-    try {
-      const res = await fetch('/api/configuracion');
-      const data = await res.json();
-      setConfiguracion(data);
-    } catch (error) {
-      console.error('Error cargando configuración:', error);
-    }
-  };
-
-  // CRUD Usuarios
-  const guardarUsuario = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData);
-    
-    try {
-      if (editandoUsuario) {
-        await fetch(`/api/usuarios/${editandoUsuario.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...data,
-            recibirEmail: data.recibirEmail === 'on',
-            recibirTelegram: data.recibirTelegram === 'on'
-          })
-        });
-      } else {
-        await fetch('/api/usuarios', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...data,
-            recibirEmail: true,
-            recibirTelegram: true
-          })
-        });
-      }
-      setModalUsuario(false);
-      setEditandoUsuario(null);
-      cargarUsuarios();
-    } catch (error) {
-      alert('Error al guardar usuario');
-    }
-  };
-
-  const eliminarUsuario = async (id: string) => {
-    try {
-      await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
-      setEliminando(null);
-      setModalConfirmar(false);
-      cargarUsuarios();
-    } catch (error) {
-      alert('Error al eliminar usuario');
-    }
-  };
-
-  // CRUD Categorías
-  const guardarCategoria = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData);
-    
-    try {
-      if (editandoCategoria) {
-        await fetch(`/api/categorias/${editandoCategoria.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-      } else {
-        await fetch('/api/categorias', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-      }
-      setModalCategoria(false);
-      setEditandoCategoria(null);
-      cargarCategorias();
-    } catch (error) {
-      alert('Error al guardar categoría');
-    }
-  };
-
-  const eliminarCategoria = async (id: string) => {
-    try {
-      await fetch(`/api/categorias/${id}`, { method: 'DELETE' });
-      setEliminando(null);
-      setModalConfirmar(false);
-      cargarCategorias();
-    } catch (error) {
-      alert('Error al eliminar categoría');
-    }
-  };
-
-  // CRUD Alertas
-  const guardarAlerta = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData);
-    
-    try {
-      const body = {
-        ...data,
-        monto: data.monto ? parseFloat(data.monto as string) : null,
-        fechaVencimiento: data.fechaVencimiento || null,
-        repetir: data.repetir === 'on'
-      };
-      
-      if (editandoAlerta) {
-        await fetch(`/api/alertas/${editandoAlerta.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-      } else {
-        await fetch('/api/alertas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-      }
-      setModalAlerta(false);
-      setEditandoAlerta(null);
-      cargarAlertas();
-    } catch (error) {
-      alert('Error al guardar alerta');
-    }
-  };
-
-  const eliminarAlerta = async (id: string) => {
-    try {
-      await fetch(`/api/alertas/${id}`, { method: 'DELETE' });
-      setEliminando(null);
-      setModalConfirmar(false);
-      cargarAlertas();
-    } catch (error) {
-      alert('Error al eliminar alerta');
-    }
-  };
-
-  // Enviar alerta
-  const enviarAlertaAhora = async (alerta: Alerta) => {
-    if (!alerta.usuario) return;
-    
-    try {
-      const mensaje = `📌 *${alerta.titulo}*\n\n${alerta.descripcion || ''}\n\n` +
-        (alerta.monto ? `💰 Monto: $${alerta.monto.toFixed(2)}\n` : '') +
-        (alerta.fechaVencimiento ? `📅 Vencimiento: ${new Date(alerta.fechaVencimiento).toLocaleDateString('es-ES')}\n` : '');
-      
-      // Enviar por email
-      if (alerta.usuario.recibirEmail && alerta.usuario.email) {
-        await fetch('/api/notificaciones', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            alertaId: alerta.id,
-            canal: 'email',
-            destinatario: alerta.usuario.email,
-            asunto: alerta.titulo,
-            mensaje
-          })
-        });
-      }
-      
-      // Enviar por Telegram
-      if (alerta.usuario.recibirTelegram && alerta.usuario.telegramId) {
-        await fetch('/api/notificaciones', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            alertaId: alerta.id,
-            canal: 'telegram',
-            destinatario: alerta.usuario.telegramId,
-            mensaje
-          })
-        });
-      }
-      
-      alert('Notificación enviada');
-      cargarAlertas();
-    } catch (error) {
-      alert('Error al enviar notificación');
-    }
-  };
-
-  // Actualizar configuración
-  const guardarConfiguracion = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData);
-    
-    try {
-      await fetch('/api/configuracion', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          emailActivo: data.emailActivo === 'on',
-          telegramActivo: data.telegramActivo === 'on',
-          enviarRecordatorios: data.enviarRecordatorios === 'on',
-          diasAnticipacion: parseInt(data.diasAnticipacion as string) || 3
-        })
-      });
-      alert('Configuración guardada');
-      cargarConfiguracion();
-    } catch (error) {
-      alert('Error al guardar configuración');
-    }
-  };
-
-  // Helpers
-  const getBadgeVariant = (estado: string) => {
-    switch (estado) {
-      case 'pendiente': return 'warning';
-      case 'enviado': return 'success';
-      case 'vencido': return 'destructive';
-      case 'pagado': return 'info';
-      default: return 'secondary';
-    }
-  };
-
-  const getPrioridadVariant = (prioridad: string) => {
-    switch (prioridad) {
-      case 'urgente': return 'destructive';
-      case 'alta': return 'warning';
-      case 'normal': return 'secondary';
-      case 'baja': return 'outline';
-      default: return 'secondary';
-    }
-  };
-
-  // Filtrar alertas por búsqueda
-  const alertasFiltradas = alertas.filter(a => 
-    busqueda === '' || 
-    a.titulo.toLowerCase().includes(busqueda.toLowerCase()) ||
-    a.usuario?.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
-
-  // Renderizado condicional de vistas
-  const renderLogin = () => (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 p-4">
-      <Card className="w-full max-w-md border-neutral-800 bg-neutral-900/90 backdrop-blur-xl">
-        <CardHeader className="text-center pb-2">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-amber-500/20">
-            <Bell className="w-8 h-8 text-neutral-900" />
-          </div>
-          <CardTitle className="text-2xl font-bold text-gradient-gold">Sistema de Alertas</CardTitle>
-          <p className="text-neutral-400 text-sm mt-1">Ingresa tus credenciales para continuar</p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={login} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">Usuario</Label>
-              <Input
-                id="username"
-                type="text"
-                value={loginForm.username}
-                onChange={e => setLoginForm({...loginForm, username: e.target.value})}
-                placeholder="admin"
-                className="bg-neutral-800 border-neutral-700"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={loginForm.password}
-                  onChange={e => setLoginForm({...loginForm, password: e.target.value})}
-                  placeholder="••••••••"
-                  className="bg-neutral-800 border-neutral-700 pr-10"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-200"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <Button 
-              type="submit" 
-              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-900 font-semibold"
-              disabled={loading}
-            >
-              {loading ? 'Ingresando...' : 'Ingresar'}
-            </Button>
-            <p className="text-center text-xs text-neutral-500 mt-4">
-              Usuario: admin | Contraseña: admin123
-            </p>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  const renderSidebar = () => (
-    <>
-      {/* Overlay mobile */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      {/* Sidebar */}
-      <aside className={`
-        fixed top-0 left-0 z-50 h-full w-64 bg-neutral-900 border-r border-neutral-800 
-        transform transition-transform duration-300 lg:translate-x-0
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center">
-              <Bell className="w-5 h-5 text-neutral-900" />
-            </div>
-            <div>
-              <h1 className="font-bold text-neutral-100">Alertas</h1>
-              <p className="text-xs text-neutral-400">{admin?.nombre}</p>
-            </div>
-          </div>
-          <button 
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-neutral-400 hover:text-neutral-200"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <nav className="p-3 space-y-1">
-          {[
-            { id: 'dashboard', icon: TrendingUp, label: 'Dashboard' },
-            { id: 'alertas', icon: Bell, label: 'Alertas' },
-            { id: 'usuarios', icon: Users, label: 'Usuarios' },
-            { id: 'categorias', icon: Tag, label: 'Categorías' },
-            { id: 'configuracion', icon: Settings, label: 'Configuración' },
-            { id: 'historial', icon: History, label: 'Historial' },
-          ].map(item => (
-            <button
-              key={item.id}
-              onClick={() => { setVista(item.id as Vista); setSidebarOpen(false); }}
-              className={`nav-btn ${vista === item.id ? 'active' : ''}`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-neutral-800">
-          <button
-            onClick={logout}
-            className="nav-btn text-red-400 hover:text-red-300 hover:bg-red-500/10"
-          >
-            <LogOut className="w-5 h-5" />
-            <span>Cerrar Sesión</span>
-          </button>
-        </div>
-      </aside>
-    </>
-  );
-
-  const renderHeader = () => (
-    <header className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-neutral-900/95 backdrop-blur-lg border-b border-neutral-800 px-4 py-3">
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="text-neutral-400 hover:text-neutral-200"
-        >
-          <Menu className="w-6 h-6" />
-        </button>
-        <h1 className="font-bold text-neutral-100">Sistema de Alertas</h1>
-        <div className="w-6" />
-      </div>
-    </header>
-  );
-
-  const renderDashboard = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-neutral-100">Dashboard</h2>
-        <Button 
-          onClick={() => cargarDashboard()}
-          variant="outline"
-          className="border-neutral-700 text-neutral-300 hover:bg-neutral-800"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Actualizar
-        </Button>
-      </div>
-      
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-amber-400 text-sm font-medium">Alertas Pendientes</p>
-                <p className="text-3xl font-bold text-neutral-100 mt-1">{stats.pendientes}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-amber-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-emerald-400 text-sm font-medium">Enviadas Hoy</p>
-                <p className="text-3xl font-bold text-neutral-100 mt-1">{stats.enviadasHoy}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                <Send className="w-6 h-6 text-emerald-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 border-cyan-500/20">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-cyan-400 text-sm font-medium">Usuarios Activos</p>
-                <p className="text-3xl font-bold text-neutral-100 mt-1">{stats.usuariosActivos}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center">
-                <Users className="w-6 h-6 text-cyan-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      {/* Próximas Alertas */}
-      <Card className="bg-neutral-900/50 border-neutral-800">
-        <CardHeader>
-          <CardTitle className="text-neutral-100 flex items-center gap-2">
-            <Bell className="w-5 h-5 text-amber-400" />
-            Próximas Alertas
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {alertas.slice(0, 5).map(alerta => (
-              <div 
-                key={alerta.id}
-                className="flex items-center justify-between p-3 bg-neutral-800/50 rounded-lg border border-neutral-700/50"
-              >
-                <div>
-                  <p className="font-medium text-neutral-100">{alerta.titulo}</p>
-                  <p className="text-sm text-neutral-400">
-                    {alerta.usuario?.nombre} • {alerta.fechaVencimiento 
-                      ? new Date(alerta.fechaVencimiento).toLocaleDateString('es-ES')
-                      : 'Sin fecha'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={getBadgeVariant(alerta.estado)}>{alerta.estado}</Badge>
-                  {alerta.monto && (
-                    <span className="text-amber-400 font-medium">${alerta.monto.toFixed(2)}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {alertas.length === 0 && (
-              <p className="text-center text-neutral-500 py-4">No hay alertas</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  const renderAlertas = () => (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-neutral-100">Gestión de Alertas</h2>
-        <Button 
-          onClick={() => { setEditandoAlerta(null); setModalAlerta(true); }}
-          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-900"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nueva Alerta
-        </Button>
-      </div>
-      
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-          <Input
-            placeholder="Buscar alertas..."
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            className="pl-10 bg-neutral-800 border-neutral-700"
-          />
-        </div>
-        <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-          <SelectTrigger className="w-full sm:w-40 bg-neutral-800 border-neutral-700">
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
-            <SelectItem value="pendiente">Pendiente</SelectItem>
-            <SelectItem value="enviado">Enviado</SelectItem>
-            <SelectItem value="vencido">Vencido</SelectItem>
-            <SelectItem value="pagado">Pagado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-          <SelectTrigger className="w-full sm:w-40 bg-neutral-800 border-neutral-700">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
-            <SelectItem value="pago">Pago</SelectItem>
-            <SelectItem value="recordatorio">Recordatorio</SelectItem>
-            <SelectItem value="aviso">Aviso</SelectItem>
-            <SelectItem value="personalizado">Personalizado</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      
-      {/* Lista de Alertas */}
-      <div className="space-y-3">
-        {alertasFiltradas.map(alerta => (
-          <Card key={alerta.id} className="bg-neutral-900/50 border-neutral-800">
-            <CardContent className="p-4">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-neutral-100">{alerta.titulo}</h3>
-                    <Badge variant={getBadgeVariant(alerta.estado)}>{alerta.estado}</Badge>
-                    <Badge variant={getPrioridadVariant(alerta.prioridad)}>{alerta.prioridad}</Badge>
-                  </div>
-                  <div className="flex flex-wrap gap-3 text-sm text-neutral-400">
-                    <span className="flex items-center gap-1">
-                      <Users className="w-4 h-4" />
-                      {alerta.usuario?.nombre}
-                    </span>
-                    {alerta.fechaVencimiento && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        {new Date(alerta.fechaVencimiento).toLocaleDateString('es-ES')}
-                      </span>
-                    )}
-                    {alerta.monto && (
-                      <span className="flex items-center gap-1 text-amber-400">
-                        <DollarSign className="w-4 h-4" />
-                        ${alerta.monto.toFixed(2)}
-                      </span>
-                    )}
-                    {alerta.categoria && (
-                      <span 
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-                        style={{ backgroundColor: alerta.categoria.color + '20', color: alerta.categoria.color }}
-                      >
-                        {alerta.categoria.nombre}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {alerta.estado === 'pendiente' && (
-                    <Button
-                      size="sm"
-                      onClick={() => enviarAlertaAhora(alerta)}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white"
-                    >
-                      <Send className="w-4 h-4 mr-1" />
-                      Enviar
-                    </Button>
-                  )}
-                  {alerta.estado === 'pendiente' && (
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        await fetch(`/api/alertas/${alerta.id}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ estado: 'pagado' })
-                        });
-                        cargarAlertas();
-                      }}
-                      variant="outline"
-                      className="border-emerald-600 text-emerald-400 hover:bg-emerald-600/10"
-                    >
-                      <Check className="w-4 h-4 mr-1" />
-                      Pagado
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setEditandoAlerta(alerta); setModalAlerta(true); }}
-                    className="border-neutral-700 text-neutral-300 hover:bg-neutral-800"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setEliminando({ tipo: 'alerta', id: alerta.id }); setModalConfirmar(true); }}
-                    className="border-red-700 text-red-400 hover:bg-red-600/10"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        {alertasFiltradas.length === 0 && (
-          <Card className="bg-neutral-900/50 border-neutral-800">
-            <CardContent className="p-8 text-center">
-              <Bell className="w-12 h-12 text-neutral-600 mx-auto mb-3" />
-              <p className="text-neutral-400">No hay alertas que mostrar</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderUsuarios = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-neutral-100">Gestión de Usuarios</h2>
-        <Button 
-          onClick={() => { setEditandoUsuario(null); setModalUsuario(true); }}
-          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-900"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nuevo Usuario
-        </Button>
-      </div>
-      
-      <div className="grid gap-3">
-        {usuarios.map(usuario => (
-          <Card key={usuario.id} className="bg-neutral-900/50 border-neutral-800">
-            <CardContent className="p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-neutral-900 font-bold text-lg">
-                    {usuario.nombre.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-neutral-100">{usuario.nombre}</h3>
-                      <Badge variant={usuario.rol === 'admin' ? 'default' : 'secondary'}>
-                        {usuario.rol}
-                      </Badge>
-                      {!usuario.activo && <Badge variant="destructive">Inactivo</Badge>}
-                    </div>
-                    <p className="text-sm text-neutral-400">{usuario.email}</p>
-                    <div className="flex gap-3 mt-1 text-xs text-neutral-500">
-                      {usuario.recibirEmail && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />Email</span>}
-                      {usuario.recibirTelegram && <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" />Telegram</span>}
-                      {usuario._count && <span>{usuario._count.alertas} alertas</span>}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setEditandoUsuario(usuario); setModalUsuario(true); }}
-                    className="border-neutral-700 text-neutral-300 hover:bg-neutral-800"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setEliminando({ tipo: 'usuario', id: usuario.id }); setModalConfirmar(true); }}
-                    className="border-red-700 text-red-400 hover:bg-red-600/10"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        {usuarios.length === 0 && (
-          <Card className="bg-neutral-900/50 border-neutral-800">
-            <CardContent className="p-8 text-center">
-              <Users className="w-12 h-12 text-neutral-600 mx-auto mb-3" />
-              <p className="text-neutral-400">No hay usuarios registrados</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderCategorias = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-neutral-100">Gestión de Categorías</h2>
-        <Button 
-          onClick={() => { setEditandoCategoria(null); setModalCategoria(true); }}
-          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-900"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nueva Categoría
-        </Button>
-      </div>
-      
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {categorias.map(categoria => (
-          <Card key={categoria.id} className="bg-neutral-900/50 border-neutral-800">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div 
-                    className="w-10 h-10 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: categoria.color + '20' }}
-                  >
-                    <Tag className="w-5 h-5" style={{ color: categoria.color }} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-neutral-100">{categoria.nombre}</h3>
-                    <p className="text-sm text-neutral-400">{categoria.descripcion || 'Sin descripción'}</p>
-                    {categoria._count && (
-                      <p className="text-xs text-neutral-500 mt-1">{categoria._count.alertas} alertas</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => { setEditandoCategoria(categoria); setModalCategoria(true); }}
-                    className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => { setEliminando({ tipo: 'categoria', id: categoria.id }); setModalConfirmar(true); }}
-                    className="text-red-400 hover:text-red-300 hover:bg-red-600/10"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        {categorias.length === 0 && (
-          <Card className="bg-neutral-900/50 border-neutral-800 sm:col-span-2 lg:col-span-3">
-            <CardContent className="p-8 text-center">
-              <Tag className="w-12 h-12 text-neutral-600 mx-auto mb-3" />
-              <p className="text-neutral-400">No hay categorías creadas</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderConfiguracion = () => (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-neutral-100">Configuración del Sistema</h2>
-      
-      <form onSubmit={guardarConfiguracion} className="space-y-6">
-        {/* Configuración General */}
-        <Card className="bg-neutral-900/50 border-neutral-800">
-          <CardHeader>
-            <CardTitle className="text-neutral-100 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-amber-400" />
-              Configuración General
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="nombreNegocio">Nombre del Negocio</Label>
-                <Input
-                  id="nombreNegocio"
-                  name="nombreNegocio"
-                  defaultValue={configuracion?.nombreNegocio}
-                  className="bg-neutral-800 border-neutral-700"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="diasAnticipacion">Días de Anticipación</Label>
-                <Input
-                  id="diasAnticipacion"
-                  name="diasAnticipacion"
-                  type="number"
-                  min="1"
-                  max="30"
-                  defaultValue={configuracion?.diasAnticipacion || 3}
-                  className="bg-neutral-800 border-neutral-700"
-                />
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Enviar Recordatorios Automáticos</Label>
-                <p className="text-sm text-neutral-400">Enviar alertas antes del vencimiento</p>
-              </div>
-              <Switch 
-                name="enviarRecordatorios"
-                defaultChecked={configuracion?.enviarRecordatorios}
-              />
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Configuración de Email */}
-        <Card className="bg-neutral-900/50 border-neutral-800">
-          <CardHeader>
-            <CardTitle className="text-neutral-100 flex items-center gap-2">
-              <Mail className="w-5 h-5 text-amber-400" />
-              Configuración de Email (Gmail)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Activar Email</Label>
-                <p className="text-sm text-neutral-400">Enviar notificaciones por email</p>
-              </div>
-              <Switch 
-                name="emailActivo"
-                defaultChecked={configuracion?.emailActivo}
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="emailRemitente">Email Remitente</Label>
-                <Input
-                  id="emailRemitente"
-                  name="emailRemitente"
-                  type="email"
-                  placeholder="tucorreo@gmail.com"
-                  defaultValue={configuracion?.emailRemitente}
-                  className="bg-neutral-800 border-neutral-700"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="emailPassword">Contraseña de Aplicación</Label>
-                <Input
-                  id="emailPassword"
-                  name="emailPassword"
-                  type="password"
-                  placeholder="••••••••"
-                  defaultValue={configuracion?.emailPassword}
-                  className="bg-neutral-800 border-neutral-700"
-                />
-              </div>
-            </div>
-            <p className="text-xs text-neutral-500">
-              Para Gmail, genera una "Contraseña de aplicación" en tu cuenta de Google
-            </p>
-          </CardContent>
-        </Card>
-        
-        {/* Configuración de Telegram */}
-        <Card className="bg-neutral-900/50 border-neutral-800">
-          <CardHeader>
-            <CardTitle className="text-neutral-100 flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-amber-400" />
-              Configuración de Telegram
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Activar Telegram</Label>
-                <p className="text-sm text-neutral-400">Enviar notificaciones por Telegram</p>
-              </div>
-              <Switch 
-                name="telegramActivo"
-                defaultChecked={configuracion?.telegramActivo}
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="telegramBotToken">Bot Token</Label>
-                <Input
-                  id="telegramBotToken"
-                  name="telegramBotToken"
-                  placeholder="123456:ABC-DEF..."
-                  defaultValue={configuracion?.telegramBotToken}
-                  className="bg-neutral-800 border-neutral-700"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="telegramChatId">Chat ID Principal</Label>
-                <Input
-                  id="telegramChatId"
-                  name="telegramChatId"
-                  placeholder="-1001234567890"
-                  defaultValue={configuracion?.telegramChatId}
-                  className="bg-neutral-800 border-neutral-700"
-                />
-              </div>
-            </div>
-            <p className="text-xs text-neutral-500">
-              Habla con @BotFather en Telegram para crear un bot y obtener el token
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Button 
-          type="submit"
-          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-900"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          Guardar Configuración
-        </Button>
-      </form>
-    </div>
-  );
-
-  const renderHistorial = () => (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-neutral-100">Historial de Notificaciones</h2>
-      
-      <div className="space-y-3">
-        {notificaciones.map(notif => (
-          <Card key={notif.id} className="bg-neutral-900/50 border-neutral-800">
-            <CardContent className="p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    notif.canal === 'email' ? 'bg-cyan-500/20' : 'bg-sky-500/20'
-                  }`}>
-                    {notif.canal === 'email' 
-                      ? <Mail className="w-5 h-5 text-cyan-400" />
-                      : <MessageSquare className="w-5 h-5 text-sky-400" />
-                    }
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-neutral-100">
-                        {notif.alerta?.titulo || 'Sin título'}
-                      </h3>
-                      <Badge variant={
-                        notif.estado === 'enviado' ? 'success' :
-                        notif.estado === 'error' ? 'destructive' : 'warning'
-                      }>
-                        {notif.estado}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-neutral-400">
-                      Para: {notif.destinatario} • {notif.usuario?.nombre || 'Sin usuario'}
-                    </p>
-                    <p className="text-xs text-neutral-500 mt-1">
-                      {new Date(notif.createdAt).toLocaleString('es-ES')}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              {notif.error && (
-                <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-sm text-red-400">
-                  <AlertCircle className="w-4 h-4 inline mr-1" />
-                  {notif.error}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {notificaciones.length === 0 && (
-          <Card className="bg-neutral-900/50 border-neutral-800">
-            <CardContent className="p-8 text-center">
-              <History className="w-12 h-12 text-neutral-600 mx-auto mb-3" />
-              <p className="text-neutral-400">No hay notificaciones en el historial</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-
-  // Modales
-  const renderModalUsuario = () => (
-    <Dialog open={modalUsuario} onOpenChange={setModalUsuario}>
-      <DialogContent className="bg-neutral-900 border-neutral-700">
-        <DialogHeader>
-          <DialogTitle>{editandoUsuario ? 'Editar Usuario' : 'Nuevo Usuario'}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={guardarUsuario} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Nombre</Label>
-            <Input 
-              name="nombre" 
-              defaultValue={editandoUsuario?.nombre}
-              className="bg-neutral-800 border-neutral-700"
-              required 
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input 
-              name="email" 
-              type="email"
-              defaultValue={editandoUsuario?.email}
-              className="bg-neutral-800 border-neutral-700"
-              required 
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Teléfono</Label>
-            <Input 
-              name="telefono" 
-              defaultValue={editandoUsuario?.telefono || ''}
-              className="bg-neutral-800 border-neutral-700"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Telegram ID</Label>
-            <Input 
-              name="telegramId" 
-              defaultValue={editandoUsuario?.telegramId || ''}
-              className="bg-neutral-800 border-neutral-700"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Rol</Label>
-            <Select name="rol" defaultValue={editandoUsuario?.rol || 'cliente'}>
-              <SelectTrigger className="bg-neutral-800 border-neutral-700">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cliente">Cliente</SelectItem>
-                <SelectItem value="admin">Administrador</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex gap-6">
-            <label className="flex items-center gap-2 text-sm">
-              <input 
-                type="checkbox" 
-                name="recibirEmail" 
-                defaultChecked={editandoUsuario?.recibirEmail ?? true}
-                className="rounded border-neutral-600 bg-neutral-800 text-amber-500"
-              />
-              Recibir Email
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input 
-                type="checkbox" 
-                name="recibirTelegram" 
-                defaultChecked={editandoUsuario?.recibirTelegram ?? true}
-                className="rounded border-neutral-600 bg-neutral-800 text-amber-500"
-              />
-              Recibir Telegram
-            </label>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setModalUsuario(false)}>Cancelar</Button>
-            <Button type="submit" className="bg-amber-500 hover:bg-amber-400 text-neutral-900">
-              {editandoUsuario ? 'Guardar' : 'Crear'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-
-  const renderModalCategoria = () => (
-    <Dialog open={modalCategoria} onOpenChange={setModalCategoria}>
-      <DialogContent className="bg-neutral-900 border-neutral-700">
-        <DialogHeader>
-          <DialogTitle>{editandoCategoria ? 'Editar Categoría' : 'Nueva Categoría'}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={guardarCategoria} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Nombre</Label>
-            <Input 
-              name="nombre" 
-              defaultValue={editandoCategoria?.nombre}
-              className="bg-neutral-800 border-neutral-700"
-              required 
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Descripción</Label>
-            <Textarea 
-              name="descripcion" 
-              defaultValue={editandoCategoria?.descripcion || ''}
-              className="bg-neutral-800 border-neutral-700"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Color</Label>
-            <div className="flex gap-2">
-              <Input 
-                name="color" 
-                type="color"
-                defaultValue={editandoCategoria?.color || '#f59e0b'}
-                className="w-16 h-10 p-1 bg-neutral-800 border-neutral-700"
-              />
-              <Input 
-                name="colorHex"
-                defaultValue={editandoCategoria?.color || '#f59e0b'}
-                className="flex-1 bg-neutral-800 border-neutral-700"
-                placeholder="#f59e0b"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setModalCategoria(false)}>Cancelar</Button>
-            <Button type="submit" className="bg-amber-500 hover:bg-amber-400 text-neutral-900">
-              {editandoCategoria ? 'Guardar' : 'Crear'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-
-  const renderModalAlerta = () => (
-    <Dialog open={modalAlerta} onOpenChange={setModalAlerta}>
-      <DialogContent className="bg-neutral-900 border-neutral-700 max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{editandoAlerta ? 'Editar Alerta' : 'Nueva Alerta'}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={guardarAlerta} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Título</Label>
-            <Input 
-              name="titulo" 
-              defaultValue={editandoAlerta?.titulo}
-              className="bg-neutral-800 border-neutral-700"
-              required 
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Descripción</Label>
-            <Textarea 
-              name="descripcion" 
-              defaultValue={editandoAlerta?.descripcion || ''}
-              className="bg-neutral-800 border-neutral-700"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Monto</Label>
-              <Input 
-                name="monto" 
-                type="number"
-                step="0.01"
-                defaultValue={editandoAlerta?.monto || ''}
-                className="bg-neutral-800 border-neutral-700"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tipo</Label>
-              <Select name="tipo" defaultValue={editandoAlerta?.tipo || 'pago'}>
-                <SelectTrigger className="bg-neutral-800 border-neutral-700">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pago">Pago</SelectItem>
-                  <SelectItem value="recordatorio">Recordatorio</SelectItem>
-                  <SelectItem value="aviso">Aviso</SelectItem>
-                  <SelectItem value="personalizado">Personalizado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Fecha de Vencimiento</Label>
-              <Input 
-                name="fechaVencimiento" 
-                type="date"
-                defaultValue={editandoAlerta?.fechaVencimiento?.split('T')[0] || ''}
-                className="bg-neutral-800 border-neutral-700"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Prioridad</Label>
-              <Select name="prioridad" defaultValue={editandoAlerta?.prioridad || 'normal'}>
-                <SelectTrigger className="bg-neutral-800 border-neutral-700">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="baja">Baja</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="alta">Alta</SelectItem>
-                  <SelectItem value="urgente">Urgente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Usuario</Label>
-              <Select name="usuarioId" defaultValue={editandoAlerta?.usuarioId || ''} required>
-                <SelectTrigger className="bg-neutral-800 border-neutral-700">
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {usuarios.map(u => (
-                    <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Categoría</Label>
-              <Select name="categoriaId" defaultValue={editandoAlerta?.categoriaId || ''}>
-                <SelectTrigger className="bg-neutral-800 border-neutral-700">
-                  <SelectValue placeholder="Sin categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Sin categoría</SelectItem>
-                  {categorias.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Estado</Label>
-              <Select name="estado" defaultValue={editandoAlerta?.estado || 'pendiente'}>
-                <SelectTrigger className="bg-neutral-800 border-neutral-700">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="enviado">Enviado</SelectItem>
-                  <SelectItem value="vencido">Vencido</SelectItem>
-                  <SelectItem value="pagado">Pagado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Repetir</Label>
-              <Select name="frecuencia" defaultValue={editandoAlerta?.frecuencia || ''}>
-                <SelectTrigger className="bg-neutral-800 border-neutral-700">
-                  <SelectValue placeholder="No repetir" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">No repetir</SelectItem>
-                  <SelectItem value="diario">Diario</SelectItem>
-                  <SelectItem value="semanal">Semanal</SelectItem>
-                  <SelectItem value="mensual">Mensual</SelectItem>
-                  <SelectItem value="anual">Anual</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setModalAlerta(false)}>Cancelar</Button>
-            <Button type="submit" className="bg-amber-500 hover:bg-amber-400 text-neutral-900">
-              {editandoAlerta ? 'Guardar' : 'Crear'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-
-  const renderModalConfirmar = () => (
-    <Dialog open={modalConfirmar} onOpenChange={setModalConfirmar}>
-      <DialogContent className="bg-neutral-900 border-neutral-700">
-        <DialogHeader>
-          <DialogTitle>Confirmar Eliminación</DialogTitle>
-          <DialogDescription>
-            ¿Estás seguro de que deseas eliminar este elemento? Esta acción no se puede deshacer.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setModalConfirmar(false)}>Cancelar</Button>
-          <Button 
-            variant="destructive"
-            onClick={() => {
-              if (eliminando?.tipo === 'usuario') eliminarUsuario(eliminando.id);
-              else if (eliminando?.tipo === 'categoria') eliminarCategoria(eliminando.id);
-              else if (eliminando?.tipo === 'alerta') eliminarAlerta(eliminando.id);
-            }}
-          >
-            Eliminar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-
-  // Render principal
-  if (vista === 'login') {
-    return renderLogin();
-  }
+  if (loading) return <LoadingScreen />;
+  if (vista === 'login') return <Login onLogin={() => { setVista('dashboard'); cargar(); }} />;
 
   return (
-    <div className="min-h-screen bg-neutral-950">
-      {renderSidebar()}
-      {renderHeader()}
-      
-      <main className="lg:ml-64 pt-16 lg:pt-0">
-        <div className="p-4 lg:p-6">
-          {vista === 'dashboard' && renderDashboard()}
-          {vista === 'alertas' && renderAlertas()}
-          {vista === 'usuarios' && renderUsuarios()}
-          {vista === 'categorias' && renderCategorias()}
-          {vista === 'configuracion' && renderConfiguracion()}
-          {vista === 'historial' && renderHistorial()}
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <header className="sticky top-0 z-40 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-neutral-800">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="font-bold text-lg">Recordatorios</h1>
+                <p className="text-xs text-neutral-500">Multicanal</p>
+              </div>
+            </div>
+            <nav className="hidden md:flex items-center gap-1">
+              {[
+                { id: 'recordatorios' as const, label: 'Recordatorios', icon: Bell },
+                { id: 'historial' as const, label: 'Historial', icon: Clock },
+                { id: 'config' as const, label: 'Config', icon: Settings }
+              ].map(item => (
+                <button key={item.id} onClick={() => setSeccion(item.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${seccion === item.id ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}>
+                  <item.icon className="w-4 h-4" /><span className="text-sm font-medium">{item.label}</span>
+                </button>
+              ))}
+            </nav>
+            <button onClick={() => { removeToken(); setVista('login'); }} className="flex items-center gap-2 px-4 py-2 text-neutral-500 hover:text-red-400 rounded-lg transition-colors">
+              <LogOut className="w-4 h-4" /><span className="text-sm hidden sm:block">Salir</span>
+            </button>
+          </div>
+          <div className="flex md:hidden items-center gap-2 mt-4 overflow-x-auto pb-2">
+            {[
+              { id: 'recordatorios' as const, label: 'Recordatorios', icon: Bell },
+              { id: 'historial' as const, label: 'Historial', icon: Clock },
+              { id: 'config' as const, label: 'Config', icon: Settings }
+            ].map(item => (
+              <button key={item.id} onClick={() => setSeccion(item.id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all ${seccion === item.id ? 'bg-amber-500 text-black font-medium' : 'bg-neutral-800 text-neutral-400'}`}>
+                <item.icon className="w-4 h-4" /><span className="text-sm">{item.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
+      </header>
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {seccion === 'recordatorios' && <RecordatoriosSection recordatorios={recordatorios} cargar={cargar} />}
+        {seccion === 'historial' && <HistorialSection />}
+        {seccion === 'config' && <ConfigSection config={config} cargar={cargar} />}
       </main>
-      
-      {renderModalUsuario()}
-      {renderModalCategoria()}
-      {renderModalAlerta()}
-      {renderModalConfirmar()}
+    </div>
+  );
+}
+
+function LoadingScreen() {
+  return <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center"><div className="text-center"><div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mx-auto mb-4 animate-pulse"><Bell className="w-8 h-8 text-white" /></div><p className="text-neutral-400">Cargando...</p></div></div>;
+}
+
+function Login({ onLogin }: { onLogin: () => void }) {
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass }) });
+      const d = await res.json();
+      if (d.success) { setToken(d.token); onLogin(); }
+      else setErr(d.error || 'Error');
+    } catch { setErr('Error de conexión'); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-6">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-10">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mx-auto mb-5 shadow-xl shadow-amber-500/20"><Bell className="w-8 h-8 text-white" /></div>
+          <h1 className="text-2xl font-bold mb-1">Recordatorios</h1>
+          <p className="text-neutral-500 text-sm">Sistema Multicanal</p>
+        </div>
+        <form onSubmit={submit} className="space-y-5">
+          <div><label className="block text-sm text-neutral-400 mb-2">Usuario</label><input required value={user} onChange={e => setUser(e.target.value)} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl focus:border-amber-500/50 outline-none" placeholder="admin" /></div>
+          <div><label className="block text-sm text-neutral-400 mb-2">Contraseña</label><input type="password" required value={pass} onChange={e => setPass(e.target.value)} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl focus:border-amber-500/50 outline-none" placeholder="••••••••" /></div>
+          {err && <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-center text-sm">{err}</div>}
+          <button disabled={loading} className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl disabled:opacity-50">{loading ? 'Verificando...' : 'Iniciar Sesión'}</button>
+        </form>
+        <p className="text-center text-neutral-600 text-xs mt-8">Usuario: admin • Contraseña: admin123</p>
+      </div>
+    </div>
+  );
+}
+
+function RecordatoriosSection({ recordatorios, cargar }: { recordatorios: Recordatorio[]; cargar: () => void }) {
+  const [modal, setModal] = useState(false);
+  const [edit, setEdit] = useState<Recordatorio | null>(null);
+  const [filtro, setFiltro] = useState('');
+  const [ejecutando, setEjecutando] = useState(false);
+
+  const filtrados = recordatorios.filter(r => r.nombre.toLowerCase().includes(filtro.toLowerCase()) || r.correo.toLowerCase().includes(filtro.toLowerCase()) || r.asunto.toLowerCase().includes(filtro.toLowerCase()));
+
+  const ejecutarDiario = async () => {
+    if (!confirm('¿Ejecutar envío de recordatorios de hoy?')) return;
+    setEjecutando(true);
+    try {
+      const res = await fetch('/api/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'ejecutarDiario' }) });
+      const d = await res.json();
+      alert(d.success ? `✅ Procesados ${d.procesados} recordatorios` : `❌ Error: ${d.error}`);
+      cargar();
+    } catch { alert('Error'); }
+    finally { setEjecutando(false); }
+  };
+
+  const enviarUno = async (id: string) => {
+    try {
+      const res = await fetch('/api/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'enviar', recordatorioId: id }) });
+      const d = await res.json();
+      alert(d.success ? '✅ Enviado' : `❌ Error: ${JSON.stringify(d.resultados)}`);
+      cargar();
+    } catch { alert('Error'); }
+  };
+
+  const eliminar = async (id: string) => {
+    if (!confirm('¿Eliminar?')) return;
+    await fetch(`/api/recordatorios/${id}`, { method: 'DELETE' });
+    cargar();
+  };
+
+  const stats = { total: recordatorios.length, pendientes: recordatorios.filter(r => r.estado === 'pendiente').length, enviados: recordatorios.filter(r => r.estado === 'enviado').length, hoy: recordatorios.filter(r => esHoy(r.fechaRecordatorio)).length };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div><h2 className="text-2xl font-bold">Recordatorios</h2><p className="text-neutral-500 text-sm mt-1">Gestiona tus recordatorios</p></div>
+        <div className="flex gap-3">
+          <button onClick={ejecutarDiario} disabled={ejecutando} className="flex items-center gap-2 px-5 py-2.5 bg-green-500/10 text-green-400 border border-green-500/20 rounded-xl hover:bg-green-500/20 disabled:opacity-50"><Play className="w-4 h-4" /><span className="text-sm font-medium">{ejecutando ? 'Ejecutando...' : 'Ejecutar Hoy'}</span></button>
+          <button onClick={() => { setEdit(null); setModal(true); }} className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl shadow-lg shadow-amber-500/20"><Plus className="w-4 h-4" /><span className="text-sm">Nuevo</span></button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-neutral-900/50 rounded-xl p-5 border border-neutral-800"><p className="text-3xl font-bold">{stats.total}</p><p className="text-sm text-neutral-500 mt-1">Total</p></div>
+        <div className="bg-amber-500/5 rounded-xl p-5 border border-amber-500/20"><p className="text-3xl font-bold text-amber-400">{stats.pendientes}</p><p className="text-sm text-neutral-500 mt-1">Pendientes</p></div>
+        <div className="bg-green-500/5 rounded-xl p-5 border border-green-500/20"><p className="text-3xl font-bold text-green-400">{stats.enviados}</p><p className="text-sm text-neutral-500 mt-1">Enviados</p></div>
+        <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20"><p className="text-3xl font-bold text-blue-400">{stats.hoy}</p><p className="text-sm text-neutral-500 mt-1">Para Hoy</p></div>
+      </div>
+      <div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" /><input placeholder="Buscar..." value={filtro} onChange={e => setFiltro(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-neutral-900/50 border border-neutral-800 rounded-xl focus:border-amber-500/50 outline-none" /></div>
+      <div className="space-y-3">
+        {filtrados.length === 0 ? <div className="text-center py-16 bg-neutral-900/30 rounded-2xl border border-neutral-800"><Bell className="w-12 h-12 text-neutral-700 mx-auto mb-4" /><p className="text-neutral-500">No hay recordatorios</p></div> : filtrados.map(r => (
+          <div key={r.id} className="bg-neutral-900/30 rounded-xl p-5 border border-neutral-800 hover:border-neutral-700 transition-colors">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  <h3 className="font-semibold text-lg">{r.nombre}</h3>
+                  <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${r.estado === 'pendiente' ? 'bg-amber-500/10 text-amber-400' : r.estado === 'enviado' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>{r.estado}</span>
+                  {esHoy(r.fechaRecordatorio) && <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400">Hoy</span>}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-neutral-400">
+                  <span className="flex items-center gap-1.5"><Mail className="w-4 h-4" />{r.correo}</span>
+                  <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" />{formatearFecha(r.fechaRecordatorio)}</span>
+                  <span className="flex items-center gap-2">{r.enviarEmail && <Mail className="w-4 h-4 text-blue-400" title="Email" />}{r.enviarTelegram && <MessageSquare className="w-4 h-4 text-cyan-400" title="Telegram" />}{r.enviarSMS && <Phone className="w-4 h-4 text-green-400" title="SMS" />}</span>
+                </div>
+                <p className="text-sm text-neutral-500 mt-2 truncate">{r.asunto}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => enviarUno(r.id)} className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-400 rounded-lg hover:bg-green-500/20"><Send className="w-4 h-4" /><span className="text-sm font-medium">Enviar</span></button>
+                <button onClick={() => { setEdit(r); setModal(true); }} className="p-2.5 text-neutral-400 hover:text-amber-400 hover:bg-neutral-800 rounded-lg"><Edit className="w-4 h-4" /></button>
+                <button onClick={() => eliminar(r.id)} className="p-2.5 text-neutral-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {modal && <ModalRecordatorio recordatorio={edit} cerrar={() => { setModal(false); setEdit(null); }} cargar={cargar} />}
+    </div>
+  );
+}
+
+function ModalRecordatorio({ recordatorio, cerrar, cargar }: { recordatorio: Recordatorio | null; cerrar: () => void; cargar: () => void }) {
+  const [data, setData] = useState({ nombre: recordatorio?.nombre || '', correo: recordatorio?.correo || '', fechaRecordatorio: recordatorio?.fechaRecordatorio?.split('T')[0] || '', asunto: recordatorio?.asunto || '', mensaje: recordatorio?.mensaje || '', telegramId: recordatorio?.telegramId || '', numeroTelefono: recordatorio?.numeroTelefono || '', enviarEmail: recordatorio?.enviarEmail ?? true, enviarTelegram: recordatorio?.enviarTelegram ?? false, enviarSMS: recordatorio?.enviarSMS ?? false });
+  const [saving, setSaving] = useState(false);
+
+  const guardar = async () => {
+    if (!data.nombre || !data.correo || !data.fechaRecordatorio || !data.asunto || !data.mensaje) { alert('Completa los campos obligatorios'); return; }
+    setSaving(true);
+    try {
+      await fetch(recordatorio ? `/api/recordatorios/${recordatorio.id}` : '/api/recordatorios', { method: recordatorio ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      cerrar(); cargar();
+    } catch { alert('Error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={cerrar}>
+      <div className="w-full max-w-xl bg-[#0f0f0f] rounded-2xl border border-neutral-800 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold">{recordatorio ? 'Editar' : 'Nuevo'} Recordatorio</h2><button onClick={cerrar} className="p-2 text-neutral-500 hover:text-white hover:bg-neutral-800 rounded-lg"><X className="w-5 h-5" /></button></div>
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label className="block text-sm text-neutral-400 mb-2">Nombre *</label><input value={data.nombre} onChange={e => setData({ ...data, nombre: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="Juan Pérez" /></div>
+              <div><label className="block text-sm text-neutral-400 mb-2">Correo *</label><input type="email" value={data.correo} onChange={e => setData({ ...data, correo: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="correo@ejemplo.com" /></div>
+            </div>
+            <div><label className="block text-sm text-neutral-400 mb-2">Fecha *</label><input type="date" value={data.fechaRecordatorio} onChange={e => setData({ ...data, fechaRecordatorio: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
+            <div><label className="block text-sm text-neutral-400 mb-2">Asunto *</label><input value={data.asunto} onChange={e => setData({ ...data, asunto: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="Recordatorio" /></div>
+            <div><label className="block text-sm text-neutral-400 mb-2">Mensaje *</label><textarea value={data.mensaje} onChange={e => setData({ ...data, mensaje: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50 resize-none" rows={4} placeholder="Escribe el mensaje..." /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label className="block text-sm text-neutral-400 mb-2">Telegram ID</label><input value={data.telegramId} onChange={e => setData({ ...data, telegramId: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="123456789" /></div>
+              <div><label className="block text-sm text-neutral-400 mb-2">Teléfono SMS</label><input value={data.numeroTelefono} onChange={e => setData({ ...data, numeroTelefono: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="+521234567890" /></div>
+            </div>
+            <div><label className="block text-sm text-neutral-400 mb-3">Canales</label><div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-3 cursor-pointer px-4 py-3 bg-neutral-900 rounded-xl border border-neutral-800 hover:border-blue-500/30"><input type="checkbox" checked={data.enviarEmail} onChange={e => setData({ ...data, enviarEmail: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><Mail className="w-5 h-5 text-blue-400" /><span>Email</span></label>
+              <label className="flex items-center gap-3 cursor-pointer px-4 py-3 bg-neutral-900 rounded-xl border border-neutral-800 hover:border-cyan-500/30"><input type="checkbox" checked={data.enviarTelegram} onChange={e => setData({ ...data, enviarTelegram: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><MessageSquare className="w-5 h-5 text-cyan-400" /><span>Telegram</span></label>
+              <label className="flex items-center gap-3 cursor-pointer px-4 py-3 bg-neutral-900 rounded-xl border border-neutral-800 hover:border-green-500/30"><input type="checkbox" checked={data.enviarSMS} onChange={e => setData({ ...data, enviarSMS: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><Phone className="w-5 h-5 text-green-400" /><span>SMS</span></label>
+            </div></div>
+            <div className="flex gap-3 pt-4"><button onClick={cerrar} className="flex-1 py-3 bg-neutral-800 rounded-xl font-medium hover:bg-neutral-700">Cancelar</button><button onClick={guardar} disabled={saving} className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar'}</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistorialSection() {
+  const [envios, setEnvios] = useState<Envio[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const cargarEnvios = async () => {
+      try {
+        const res = await fetch('/api/recordatorios');
+        const recs = await res.json();
+        const todos: any[] = [];
+        for (const r of recs) { if (r.envios) todos.push(...r.envios.map((e: any) => ({ ...e, recordatorioNombre: r.nombre }))); }
+        setEnvios(todos.sort((a, b) => new Date(b.enviadoAt).getTime() - new Date(a.enviadoAt).getTime()));
+      } catch { }
+      finally { setLoading(false); }
+    };
+    cargarEnvios();
+  }, []);
+
+  return (
+    <div className="space-y-8">
+      <div><h2 className="text-2xl font-bold">Historial</h2><p className="text-neutral-500 text-sm mt-1">Registro de envíos</p></div>
+      {loading ? <div className="text-center py-16 text-neutral-400">Cargando...</div> : envios.length === 0 ? <div className="text-center py-16 bg-neutral-900/30 rounded-2xl border border-neutral-800"><Clock className="w-12 h-12 text-neutral-700 mx-auto mb-4" /><p className="text-neutral-500">No hay envíos</p></div> : (
+        <div className="space-y-3">
+          {envios.map(e => (
+            <div key={e.id} className="bg-neutral-900/30 rounded-xl p-5 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-xl ${e.canal === 'email' ? 'bg-blue-500/10' : e.canal === 'telegram' ? 'bg-cyan-500/10' : 'bg-green-500/10'}`}>{e.canal === 'email' ? <Mail className="w-5 h-5 text-blue-400" /> : e.canal === 'telegram' ? <MessageSquare className="w-5 h-5 text-cyan-400" /> : <Phone className="w-5 h-5 text-green-400" />}</div>
+                <div><p className="font-medium">{(e as any).recordatorioNombre || 'N/A'}</p><p className="text-sm text-neutral-500">{e.destinatario}</p></div>
+              </div>
+              <div className="text-left sm:text-right"><p className={`text-sm font-medium ${e.estado === 'enviado' ? 'text-green-400' : 'text-red-400'}`}>{e.estado === 'enviado' ? '✓ Enviado' : '✗ Error'}</p><p className="text-xs text-neutral-500">{new Date(e.enviadoAt).toLocaleString('es-ES')}</p>{e.error && <p className="text-xs text-red-400 mt-1">{e.error}</p>}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConfigSection({ config, cargar }: { config: Config | null; cargar: () => void }) {
+  const [data, setData] = useState({ gmailEmail: '', gmailPassword: '', gmailActivo: false, telegramBotToken: '', telegramActivo: false, twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '', smsActivo: false, horaEjecucion: '09:00' });
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (config) {
+      setData({ gmailEmail: config.gmailEmail || '', gmailPassword: '', gmailActivo: config.gmailActivo, telegramBotToken: '', telegramActivo: config.telegramActivo, twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: config.twilioPhoneNumber || '', smsActivo: config.smsActivo, horaEjecucion: config.horaEjecucion || '09:00' });
+    }
+  }, [config]);
+
+  const guardar = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/configuracion', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      const d = await res.json();
+      alert(d.success ? '✅ Guardado' : `❌ Error: ${d.error}`);
+      if (d.success) cargar();
+    } catch { alert('Error'); }
+    finally { setSaving(false); }
+  };
+
+  const probarEmail = async () => {
+    const email = prompt('Email de prueba:'); if (!email) return;
+    setTesting('email');
+    try {
+      const res = await fetch('/api/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'testEmail', testEmail: email }) });
+      const d = await res.json();
+      alert(d.success ? '✅ Enviado' : `❌ Error: ${d.error}`);
+    } catch { alert('Error'); }
+    finally { setTesting(null); }
+  };
+
+  const probarTelegram = async () => {
+    const chatId = prompt('Chat ID:'); if (!chatId) return;
+    setTesting('telegram');
+    try {
+      const res = await fetch('/api/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'testTelegram', testTelegram: chatId }) });
+      const d = await res.json();
+      alert(d.success ? '✅ Enviado' : `❌ Error: ${d.error}`);
+    } catch { alert('Error'); }
+    finally { setTesting(null); }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div><h2 className="text-2xl font-bold">Configuración</h2><p className="text-neutral-500 text-sm mt-1">Canales de notificación</p></div>
+
+      {/* Automatización */}
+      <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 rounded-2xl p-6 border border-amber-500/20">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="p-3 bg-amber-500/20 rounded-xl"><Zap className="w-6 h-6 text-amber-400" /></div>
+          <div><h3 className="font-semibold text-lg">Envío Automático</h3><p className="text-sm text-neutral-400">Configura un cron job externo</p></div>
+        </div>
+        <div className="bg-neutral-900/50 rounded-xl p-4">
+          <p className="text-sm text-neutral-300 mb-2">URL del Cron:</p>
+          <code className="block bg-neutral-800 rounded-lg p-3 text-xs text-amber-400 break-all">https://recordatorios-gray.vercel.app/api/cron?secret=recordatorios-cron-2024</code>
+          <p className="text-xs text-neutral-500 mt-2"> Usa cron-job.org para ejecutar esta URL diariamente</p>
+        </div>
+      </div>
+
+      {/* Gmail */}
+      <div className="bg-neutral-900/30 rounded-2xl p-6 border border-neutral-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-4"><div className="p-3 bg-blue-500/10 rounded-xl"><Mail className="w-6 h-6 text-blue-400" /></div><div><h3 className="font-semibold text-lg">Gmail</h3><p className="text-sm text-neutral-500">Correos electrónicos</p></div></div>
+          <div className="flex items-center gap-4">{config?.gmailConfigurado && <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-3 py-1 rounded-full"><Check className="w-3 h-3" /> Guardado</span>}<label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={data.gmailActivo} onChange={e => setData({ ...data, gmailActivo: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><span className="text-sm">Activo</span></label></div>
+        </div>
+        <div className="space-y-4">
+          <div><label className="block text-sm text-neutral-400 mb-2">Correo Gmail</label><input type="email" placeholder="tucorreo@gmail.com" value={data.gmailEmail} onChange={e => setData({ ...data, gmailEmail: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
+          <div><label className="block text-sm text-neutral-400 mb-2">App Password {config?.gmailConfigurado && <span className="text-green-400 text-xs">(vacío = mantener)</span>}</label><input type="password" placeholder="App Password" value={data.gmailPassword} onChange={e => setData({ ...data, gmailPassword: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
+          <button onClick={probarEmail} disabled={testing === 'email'} className="px-5 py-2.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 disabled:opacity-50 text-sm font-medium">{testing === 'email' ? 'Enviando...' : 'Probar Email'}</button>
+        </div>
+      </div>
+
+      {/* Telegram */}
+      <div className="bg-neutral-900/30 rounded-2xl p-6 border border-neutral-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-4"><div className="p-3 bg-cyan-500/10 rounded-xl"><MessageSquare className="w-6 h-6 text-cyan-400" /></div><div><h3 className="font-semibold text-lg">Telegram</h3><p className="text-sm text-neutral-500">Bot de Telegram</p></div></div>
+          <div className="flex items-center gap-4">{config?.telegramConfigurado && <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-3 py-1 rounded-full"><Check className="w-3 h-3" /> Guardado</span>}<label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={data.telegramActivo} onChange={e => setData({ ...data, telegramActivo: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><span className="text-sm">Activo</span></label></div>
+        </div>
+        <div className="space-y-4">
+          <div><label className="block text-sm text-neutral-400 mb-2">Bot Token {config?.telegramConfigurado && <span className="text-green-400 text-xs">(vacío = mantener)</span>}</label><input type="password" placeholder="123456789:ABC..." value={data.telegramBotToken} onChange={e => setData({ ...data, telegramBotToken: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
+          <button onClick={probarTelegram} disabled={testing === 'telegram'} className="px-5 py-2.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl hover:bg-cyan-500/20 disabled:opacity-50 text-sm font-medium">{testing === 'telegram' ? 'Enviando...' : 'Probar Telegram'}</button>
+        </div>
+      </div>
+
+      {/* Hora */}
+      <div className="bg-neutral-900/30 rounded-2xl p-6 border border-neutral-800">
+        <div className="flex items-center gap-4 mb-6"><div className="p-3 bg-amber-500/10 rounded-xl"><Clock className="w-6 h-6 text-amber-400" /></div><div><h3 className="font-semibold text-lg">Hora de Ejecución</h3><p className="text-sm text-neutral-500">Hora diaria</p></div></div>
+        <input type="time" value={data.horaEjecucion} onChange={e => setData({ ...data, horaEjecucion: e.target.value })} className="px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" />
+      </div>
+
+      <button onClick={guardar} disabled={saving} className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl disabled:opacity-50 shadow-lg shadow-amber-500/20">{saving ? 'Guardando...' : 'Guardar Configuración'}</button>
     </div>
   );
 }

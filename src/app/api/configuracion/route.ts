@@ -15,7 +15,7 @@ export async function GET() {
       });
     }
 
-    // Devolver configuración con indicadores de qué ya está guardado
+    // Devolver configuración con flags de qué está configurado
     return NextResponse.json({
       id: config.id,
       nombreSistema: config.nombreSistema,
@@ -24,17 +24,17 @@ export async function GET() {
       // Gmail
       gmailEmail: config.gmailEmail || '',
       gmailActivo: config.gmailActivo,
-      gmailConfigurado: !!config.gmailPassword,
+      gmailConfigurado: !!(config.gmailEmail && config.gmailPassword),
 
       // Telegram
       telegramActivo: config.telegramActivo,
       telegramConfigurado: !!config.telegramBotToken,
 
-      // SMS/Twilio
-      twilioAccountSid: config.twilioAccountSid || '',
-      twilioPhoneNumber: config.twilioPhoneNumber || '',
+      // SMS
       smsActivo: config.smsActivo,
-      twilioConfigurado: !!config.twilioAuthToken,
+      smsConfigurado: !!(config.twilioAccountSid && config.twilioAuthToken),
+      twilioPhoneNumber: config.twilioPhoneNumber || '',
+      twilioAccountSid: config.twilioAccountSid || '',
     });
   } catch (error) {
     console.error('Error obteniendo configuración:', error);
@@ -46,22 +46,21 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const data = await request.json();
-
     let config = await db.configuracion.findFirst();
 
-    // Preparar datos básicos que siempre se actualizan
+    // Preparar datos a actualizar
     const updateData: any = {
       nombreSistema: data.nombreSistema,
       horaEjecucion: data.horaEjecucion,
       gmailEmail: data.gmailEmail,
       gmailActivo: data.gmailActivo,
       telegramActivo: data.telegramActivo,
-      twilioAccountSid: data.twilioAccountSid,
-      twilioPhoneNumber: data.twilioPhoneNumber,
       smsActivo: data.smsActivo,
+      twilioPhoneNumber: data.twilioPhoneNumber,
+      twilioAccountSid: data.twilioAccountSid,
     };
 
-    // Solo actualizar contraseñas/tokens si vienen con valor real (no vacío)
+    // Solo actualizar secretos si vienen con valor
     if (data.gmailPassword && data.gmailPassword.trim().length > 0) {
       updateData.gmailPassword = data.gmailPassword.trim();
     }
