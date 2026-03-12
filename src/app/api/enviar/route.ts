@@ -8,13 +8,21 @@ async function enviarEmail(to: string, asunto: string, mensaje: string, config: 
     return { success: false, error: 'Gmail no configurado o inactivo' };
   }
   try {
-    const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: config.gmailEmail, pass: config.gmailPassword } });
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: config.gmailEmail, pass: config.gmailPassword }
+    });
     await transporter.sendMail({
       from: config.gmailEmail,
       to,
       subject: asunto,
       text: mensaje,
-      html: `<div style="font-family:Arial;padding:20px;max-width:600px"><h2 style="color:#f59e0b">${asunto}</h2><div style="white-space:pre-wrap;line-height:1.6">${mensaje}</div><hr style="margin:30px 0;border:none;border-top:1px solid #eee"><p style="color:#888;font-size:12px">Sistema de Recordatorios</p></div>`
+      html: `<div style="font-family:Arial;padding:20px;max-width:600px">
+        <h2 style="color:#f59e0b">${asunto}</h2>
+        <div style="white-space:pre-wrap;line-height:1.6">${mensaje}</div>
+        <hr style="margin:30px 0;border:none;border-top:1px solid #eee">
+        <p style="color:#888;font-size:12px">Sistema de Recordatorios</p>
+      </div>`
     });
     return { success: true };
   } catch (error: any) {
@@ -31,7 +39,11 @@ async function enviarTelegram(chatId: string, mensaje: string, config: any) {
     const res = await fetch(`https://api.telegram.org/bot${config.telegramBotToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: `🔔 *Recordatorio*\n\n${mensaje}`, parse_mode: 'Markdown' })
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: `🔔 *Recordatorio*\n\n${mensaje}`,
+        parse_mode: 'Markdown'
+      })
     });
     const data = await res.json();
     return data.ok ? { success: true } : { success: false, error: data.description || 'Error' };

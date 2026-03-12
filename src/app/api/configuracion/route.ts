@@ -8,14 +8,10 @@ export async function GET() {
 
     if (!config) {
       config = await db.configuracion.create({
-        data: {
-          nombreSistema: 'Sistema de Recordatorios Multicanal',
-          horaEjecucion: '09:00',
-        }
+        data: { nombreSistema: 'Sistema de Recordatorios Multicanal' }
       });
     }
 
-    // Devolver configuración con flags de qué está configurado
     return NextResponse.json({
       id: config.id,
       nombreSistema: config.nombreSistema,
@@ -34,10 +30,9 @@ export async function GET() {
       smsActivo: config.smsActivo,
       smsConfigurado: !!(config.twilioAccountSid && config.twilioAuthToken),
       twilioPhoneNumber: config.twilioPhoneNumber || '',
-      twilioAccountSid: config.twilioAccountSid || '',
     });
   } catch (error) {
-    console.error('Error obteniendo configuración:', error);
+    console.error('Error:', error);
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
   }
 }
@@ -48,7 +43,6 @@ export async function PATCH(request: Request) {
     const data = await request.json();
     let config = await db.configuracion.findFirst();
 
-    // Preparar datos a actualizar
     const updateData: any = {
       nombreSistema: data.nombreSistema,
       horaEjecucion: data.horaEjecucion,
@@ -57,32 +51,23 @@ export async function PATCH(request: Request) {
       telegramActivo: data.telegramActivo,
       smsActivo: data.smsActivo,
       twilioPhoneNumber: data.twilioPhoneNumber,
-      twilioAccountSid: data.twilioAccountSid,
     };
 
-    // Solo actualizar secretos si vienen con valor
-    if (data.gmailPassword && data.gmailPassword.trim().length > 0) {
-      updateData.gmailPassword = data.gmailPassword.trim();
-    }
-    if (data.telegramBotToken && data.telegramBotToken.trim().length > 0) {
-      updateData.telegramBotToken = data.telegramBotToken.trim();
-    }
-    if (data.twilioAuthToken && data.twilioAuthToken.trim().length > 0) {
-      updateData.twilioAuthToken = data.twilioAuthToken.trim();
-    }
+    // Solo actualizar contraseñas si vienen con valor
+    if (data.gmailPassword?.trim()) updateData.gmailPassword = data.gmailPassword.trim();
+    if (data.telegramBotToken?.trim()) updateData.telegramBotToken = data.telegramBotToken.trim();
+    if (data.twilioAccountSid) updateData.twilioAccountSid = data.twilioAccountSid;
+    if (data.twilioAuthToken?.trim()) updateData.twilioAuthToken = data.twilioAuthToken.trim();
 
     if (!config) {
       config = await db.configuracion.create({ data: updateData });
     } else {
-      config = await db.configuracion.update({
-        where: { id: config.id },
-        data: updateData
-      });
+      config = await db.configuracion.update({ where: { id: config.id }, data: updateData });
     }
 
-    return NextResponse.json({ success: true, message: 'Configuración guardada' });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error actualizando configuración:', error);
+    console.error('Error:', error);
     return NextResponse.json({ error: 'Error al guardar' }, { status: 500 });
   }
 }
