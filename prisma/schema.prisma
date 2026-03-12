@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Configuración general de la aplicación
+model Configuracion {
+  id              String   @id @default(cuid())
+  
+  // Datos del negocio
+  nombreNegocio   String   @default("Sistema de Alertas")
+  logoUrl         String?
+  
+  // Configuración de Email (Gmail SMTP)
+  emailRemitente      String?   // email@gmail.com
+  emailPassword       String?   // App password de Gmail
+  emailActivo         Boolean  @default(false)
+  
+  // Configuración de Telegram
+  telegramBotToken    String?
+  telegramChatId      String?   // Chat ID del dueño
+  telegramActivo      Boolean  @default(false)
+  
+  // Configuración de recordatorios
+  diasAnticipacion    Int      @default(3)    // Días antes del vencimiento
+  enviarRecordatorios Boolean  @default(true)
+  
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+// Usuarios del sistema (dueño y clientes)
+model Usuario {
+  id          String   @id @default(cuid())
+  nombre      String
+  email       String   @unique
+  telefono    String?
+  telegramId  String?   // Chat ID de Telegram del usuario
+  
+  // Tipo de usuario
+  rol         String   @default("cliente")  // "admin" o "cliente"
+  
+  // Preferencias de notificación
+  recibirEmail    Boolean  @default(true)
+  recibirTelegram Boolean  @default(true)
+  
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  alertas         Alerta[]
+  notificaciones  Notificacion[]
+}
+
+// Categorías de alertas
+model Categoria {
+  id          String   @id @default(cuid())
+  nombre      String   @unique
+  descripcion String?
+  color       String   @default("#f59e0b")  // Color para identificar
+  icono       String   @default("bell")
+  activo      Boolean  @default(true)
+  orden       Int      @default(0)
+  
+  alertas     Alerta[]
+}
+
+// Alertas / Recordatorios
+model Alerta {
+  id          String   @id @default(cuid())
+  
+  // Información principal
+  titulo      String
+  descripcion String?
+  monto       Float?   // Para pagos pendientes
+  
+  // Tipo de alerta
+  tipo        String   @default("pago")  // "pago", "recordatorio", "aviso", "personalizado"
+  
+  // Fechas
+  fechaVencimiento  DateTime?  // Para pagos
+  fechaProgramada   DateTime?  // Cuándo enviar la alerta
+  
+  // Estado
+  estado      String   @default("pendiente")  // "pendiente", "enviado", "vencido", "pagado"
+  prioridad   String   @default("normal")     // "baja", "normal", "alta", "urgente"
+  
+  // Repetición
+  repetir     Boolean  @default(false)
+  frecuencia  String?  // "diario", "semanal", "mensual", "anual"
+  
+  // Relaciones
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  
+  categoriaId String?
+  categoria   Categoria? @relation(fields: [categoriaId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  notificaciones  Notificacion[]
+}
+
+// Historial de notificaciones enviadas
+model Notificacion {
+  id          String   @id @default(cuid())
+  
+  // Canales
+  canal       String   // "email", "telegram"
+  destinatario String  // email o chat_id
+  
+  // Estado del envío
+  estado      String   @default("enviando")  // "enviando", "enviado", "error"
+  error       String?  // Mensaje de error si falló
+  
+  // Contenido
+  asunto      String?
+  mensaje     String
+  
+  // Relaciones
+  alertaId    String
+  alerta      Alerta   @relation(fields: [alertaId], references: [id])
+  
+  usuarioId   String?
+  usuario     Usuario? @relation(fields: [usuarioId], references: [id])
+  
+  createdAt   DateTime @default(now())
+}
+
+// Administradores del sistema
+model Admin {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  nombre    String
+  email     String?
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// Plantillas de mensajes
+model Plantilla {
+  id          String   @id @default(cuid())
+  nombre      String
+  asunto      String?  // Para emails
+  contenido   String
+  tipo        String   @default("general")  // "pago", "recordatorio", "general"
+  variables   String?  // JSON con variables disponibles
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

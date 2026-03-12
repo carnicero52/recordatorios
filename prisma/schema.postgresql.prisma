@@ -1,0 +1,111 @@
+// Schema para PostgreSQL (Neon) - Usar en producción
+// Este schema es compatible con Neon PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Configuración del negocio (todo editable desde admin)
+model Configuracion {
+  id              String   @id @default(cuid())
+  
+  // Datos del negocio
+  nombreNegocio   String   @default("Mi Barbería")
+  lema            String   @default("Estilo y elegencia")
+  logoUrl         String?
+  faviconUrl      String?
+  
+  // Contacto
+  telefono        String?
+  whatsapp        String?
+  email           String?
+  direccion       String?
+  mapaUrl         String?
+  
+  // Horarios
+  horarioLunes    String   @default("9:00 AM - 7:00 PM")
+  horarioMartes   String   @default("9:00 AM - 7:00 PM")
+  horarioMiercoles String  @default("9:00 AM - 7:00 PM")
+  horarioJueves   String   @default("9:00 AM - 7:00 PM")
+  horarioViernes  String   @default("9:00 AM - 7:00 PM")
+  horarioSabado   String   @default("9:00 AM - 5:00 PM")
+  horarioDomingo  String   @default("Cerrado")
+  
+  // Colores
+  colorPrimario   String   @default("#2d2d2d")
+  colorSecundario String   @default("#c9a227")
+  colorFondo      String   @default("#1a1a1a")
+  
+  // Redes sociales
+  facebook        String?
+  instagram       String?
+  tiktok          String?
+  
+  // Notificaciones Telegram (opcional)
+  telegramBotToken String?
+  telegramChatId   String?
+  notificacionesActivas Boolean @default(false)
+  
+  // Mensaje WhatsApp predefinido
+  mensajeWhatsapp String   @default("Hola! Me gustaría agendar una cita.")
+  
+  updatedAt       DateTime @updatedAt
+}
+
+// Servicios que ofrece la barbería
+model Servicio {
+  id          String   @id @default(cuid())
+  nombre      String
+  precio      Float
+  duracion    Int      @default(30)
+  descripcion String?
+  imagenUrl   String?
+  activo      Boolean  @default(true)
+  orden       Int      @default(0)
+  createdAt   DateTime @default(now())
+  
+  citas       Cita[]
+}
+
+// Cortes de la galería
+model Corte {
+  id          String   @id @default(cuid())
+  titulo      String
+  descripcion String?
+  imagenUrl   String?
+  activo      Boolean  @default(true)
+  orden       Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+// Citas agendadas
+model Cita {
+  id            String   @id @default(cuid())
+  fecha         DateTime
+  hora          String
+  clienteNombre String
+  clienteTelefono String
+  clienteEmail  String?
+  estado        String   @default("pendiente")
+  notas         String?
+  createdAt     DateTime @default(now())
+  
+  servicioId    String
+  servicio      Servicio @relation(fields: [servicioId], references: [id])
+}
+
+// Administradores
+model Admin {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  nombre    String
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
