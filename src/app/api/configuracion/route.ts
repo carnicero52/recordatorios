@@ -1,77 +1,89 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
-// GET - Obtener configuración
+// Obtener configuración
 export async function GET() {
   try {
     let config = await db.configuracion.findFirst();
 
-    // Si no existe, crear configuración por defecto
     if (!config) {
       config = await db.configuracion.create({
         data: {
-          nombreNegocio: 'Sistema de Alertas',
-          diasAnticipacion: 3,
-          enviarRecordatorios: true
+          nombreSistema: 'Sistema de Recordatorios Multicanal',
+          horaEjecucion: '09:00',
         }
       });
     }
 
-    return NextResponse.json(config);
+    // Devolver configuración con indicadores de qué ya está guardado
+    return NextResponse.json({
+      id: config.id,
+      nombreSistema: config.nombreSistema,
+      horaEjecucion: config.horaEjecucion,
+
+      // Gmail
+      gmailEmail: config.gmailEmail || '',
+      gmailActivo: config.gmailActivo,
+      gmailConfigurado: !!config.gmailPassword,
+
+      // Telegram
+      telegramActivo: config.telegramActivo,
+      telegramConfigurado: !!config.telegramBotToken,
+
+      // SMS/Twilio
+      twilioAccountSid: config.twilioAccountSid || '',
+      twilioPhoneNumber: config.twilioPhoneNumber || '',
+      smsActivo: config.smsActivo,
+      twilioConfigurado: !!config.twilioAuthToken,
+    });
   } catch (error) {
     console.error('Error obteniendo configuración:', error);
-    return NextResponse.json(
-      { error: 'Error al obtener configuración' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
   }
 }
 
-// PATCH - Actualizar configuración
-export async function PATCH(request: NextRequest) {
+// Actualizar configuración
+export async function PATCH(request: Request) {
   try {
-    const body = await request.json();
+    const data = await request.json();
 
     let config = await db.configuracion.findFirst();
 
+    // Preparar datos básicos que siempre se actualizan
+    const updateData: any = {
+      nombreSistema: data.nombreSistema,
+      horaEjecucion: data.horaEjecucion,
+      gmailEmail: data.gmailEmail,
+      gmailActivo: data.gmailActivo,
+      telegramActivo: data.telegramActivo,
+      twilioAccountSid: data.twilioAccountSid,
+      twilioPhoneNumber: data.twilioPhoneNumber,
+      smsActivo: data.smsActivo,
+    };
+
+    // Solo actualizar contraseñas/tokens si vienen con valor real (no vacío)
+    if (data.gmailPassword && data.gmailPassword.trim().length > 0) {
+      updateData.gmailPassword = data.gmailPassword.trim();
+    }
+    if (data.telegramBotToken && data.telegramBotToken.trim().length > 0) {
+      updateData.telegramBotToken = data.telegramBotToken.trim();
+    }
+    if (data.twilioAuthToken && data.twilioAuthToken.trim().length > 0) {
+      updateData.twilioAuthToken = data.twilioAuthToken.trim();
+    }
+
     if (!config) {
-      config = await db.configuracion.create({
-        data: {
-          nombreNegocio: body.nombreNegocio || 'Sistema de Alertas',
-          emailRemitente: body.emailRemitente,
-          emailPassword: body.emailPassword,
-          emailActivo: body.emailActivo ?? false,
-          telegramBotToken: body.telegramBotToken,
-          telegramChatId: body.telegramChatId,
-          telegramActivo: body.telegramActivo ?? false,
-          diasAnticipacion: body.diasAnticipacion ?? 3,
-          enviarRecordatorios: body.enviarRecordatorios ?? true
-        }
-      });
+      config = await db.configuracion.create({ data: updateData });
     } else {
       config = await db.configuracion.update({
         where: { id: config.id },
-        data: {
-          nombreNegocio: body.nombreNegocio,
-          logoUrl: body.logoUrl,
-          emailRemitente: body.emailRemitente,
-          emailPassword: body.emailPassword,
-          emailActivo: body.emailActivo,
-          telegramBotToken: body.telegramBotToken,
-          telegramChatId: body.telegramChatId,
-          telegramActivo: body.telegramActivo,
-          diasAnticipacion: body.diasAnticipacion,
-          enviarRecordatorios: body.enviarRecordatorios
-        }
+        data: updateData
       });
     }
 
-    return NextResponse.json(config);
+    return NextResponse.json({ success: true, message: 'Configuración guardada' });
   } catch (error) {
     console.error('Error actualizando configuración:', error);
-    return NextResponse.json(
-      { error: 'Error al actualizar configuración' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Error al guardar' }, { status: 500 });
   }
 }

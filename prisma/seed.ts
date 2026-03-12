@@ -5,10 +5,10 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Inicializando base de datos...');
-  
+
   // Hashear contraseña
   const hashedPassword = await bcrypt.hash('admin123', 10);
-  
+
   // Crear admin por defecto
   const admin = await prisma.admin.upsert({
     where: { username: 'admin' },
@@ -23,9 +23,9 @@ async function main() {
       activo: true,
     },
   });
-  
+
   console.log('✅ Admin creado/actualizado:', admin.username);
-  
+
   // Crear configuración inicial si no existe
   const config = await prisma.configuracion.findFirst();
   if (!config) {
@@ -39,7 +39,7 @@ async function main() {
   } else {
     console.log('ℹ️ Configuración ya existe');
   }
-  
+
   console.log('🎉 Base de datos inicializada correctamente');
 }
 

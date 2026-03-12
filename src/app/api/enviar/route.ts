@@ -1,163 +1,184 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { enviarEmail } from '@/lib/email';
-import { enviarTelegram } from '@/lib/telegram';
+import nodemailer from 'nodemailer';
 
-// POST - Enviar alertas pendientes programadas
-export async function POST(request: NextRequest) {
+// ========== ENVÍO DE EMAIL (Gmail SMTP) ==========
+async function enviarEmail(to: string, asunto: string, mensaje: string, config: any): Promise<{ success: boolean; error?: string }> {
+  if (!config.gmailActivo || !config.gmailEmail || !config.gmailPassword) {
+    return { success: false, error: 'Gmail no configurado o inactivo' };
+  }
   try {
-    const config = await db.configuracion.findFirst();
-    
-    if (!config || !config.enviarRecordatorios) {
-      return NextResponse.json({
-        message: 'Los recordatorios están desactivados'
-      });
-    }
-
-    const hoy = new Date();
-    const diasAnticipacion = config.diasAnticipacion || 3;
-    const fechaLimite = new Date(hoy);
-    fechaLimite.setDate(fechaLimite.getDate() + diasAnticipacion);
-
-    // Buscar alertas pendientes que vencen pronto
-    const alertasPendientes = await db.alerta.findMany({
-      where: {
-        estado: 'pendiente',
-        fechaVencimiento: {
-          lte: fechaLimite,
-          gte: hoy
-        }
-      },
-      include: {
-        usuario: true,
-        categoria: true
-      }
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: config.gmailEmail, pass: config.gmailPassword },
     });
-
-    const resultados = [];
-
-    for (const alerta of alertasPendientes) {
-      const mensaje = construirMensaje(alerta, config);
-      const asunto = `Recordatorio: ${alerta.titulo}`;
-
-      // Enviar por email si está activo y el usuario lo permite
-      if (config.emailActivo && alerta.usuario.recibirEmail && alerta.usuario.email) {
-        const notificacion = await db.notificacion.create({
-          data: {
-            canal: 'email',
-            destinatario: alerta.usuario.email,
-            asunto,
-            mensaje,
-            alertaId: alerta.id,
-            usuarioId: alerta.usuarioId,
-            estado: 'enviando'
-          }
-        });
-
-        try {
-          const exitoso = await enviarEmail({
-            to: alerta.usuario.email,
-            subject: asunto,
-            text: mensaje
-          });
-
-          await db.notificacion.update({
-            where: { id: notificacion.id },
-            data: { estado: exitoso ? 'enviado' : 'error' }
-          });
-
-          resultados.push({
-            alertaId: alerta.id,
-            canal: 'email',
-            exitoso
-          });
-        } catch (error: any) {
-          await db.notificacion.update({
-            where: { id: notificacion.id },
-            data: { estado: 'error', error: error.message }
-          });
-        }
-      }
-
-      // Enviar por Telegram si está activo y el usuario lo permite
-      if (config.telegramActivo && alerta.usuario.recibirTelegram && alerta.usuario.telegramId) {
-        const notificacion = await db.notificacion.create({
-          data: {
-            canal: 'telegram',
-            destinatario: alerta.usuario.telegramId,
-            mensaje,
-            alertaId: alerta.id,
-            usuarioId: alerta.usuarioId,
-            estado: 'enviando'
-          }
-        });
-
-        try {
-          const exitoso = await enviarTelegram(alerta.usuario.telegramId, mensaje);
-
-          await db.notificacion.update({
-            where: { id: notificacion.id },
-            data: { estado: exitoso ? 'enviado' : 'error' }
-          });
-
-          resultados.push({
-            alertaId: alerta.id,
-            canal: 'telegram',
-            exitoso
-          });
-        } catch (error: any) {
-          await db.notificacion.update({
-            where: { id: notificacion.id },
-            data: { estado: 'error', error: error.message }
-          });
-        }
-      }
-
-      // Marcar alerta como enviada
-      await db.alerta.update({
-        where: { id: alerta.id },
-        data: { estado: 'enviado' }
-      });
-    }
-
-    return NextResponse.json({
-      totalProcesadas: alertasPendientes.length,
-      resultados
+    await transporter.sendMail({
+      from: config.gmailEmail,
+      to,
+      subject: asunto,
+      text: mensaje,
+      html: `<div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2 style="color: #f59e0b;">${asunto}</h2>
+        <p style="white-space: pre-wrap;">${mensaje}</p>
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+        <p style="color: #888; font-size: 12px;">Sistema de Recordatorios Multicanal</p>
+      </div>`,
     });
-  } catch (error) {
-    console.error('Error enviando alertas:', error);
-    return NextResponse.json(
-      { error: 'Error al enviar alertas' },
-      { status: 500 }
-    );
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 }
 
-function construirMensaje(alerta: any, config: any): string {
-  let mensaje = `📌 *${alerta.titulo}*\n\n`;
-  
-  if (alerta.descripcion) {
-    mensaje += `${alerta.descripcion}\n\n`;
+// ========== ENVÍO DE TELEGRAM ==========
+async function enviarTelegram(telegramId: string, mensaje: string, config: any): Promise<{ success: boolean; error?: string }> {
+  if (!config.telegramActivo || !config.telegramBotToken) {
+    return { success: false, error: 'Telegram no configurado o inactivo' };
   }
-
-  if (alerta.monto) {
-    mensaje += `💰 Monto: $${alerta.monto.toFixed(2)}\n`;
-  }
-
-  if (alerta.fechaVencimiento) {
-    const fecha = new Date(alerta.fechaVencimiento).toLocaleDateString('es-ES', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${config.telegramBotToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: telegramId,
+        text: `🔔 *Recordatorio*\n\n${mensaje}`,
+        parse_mode: 'Markdown',
+      }),
     });
-    mensaje += `📅 Vencimiento: ${fecha}\n`;
+    const data = await response.json();
+    if (!data.ok) return { success: false, error: data.description || 'Error de Telegram' };
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
+}
 
-  if (alerta.categoria) {
-    mensaje += `🏷️ Categoría: ${alerta.categoria.nombre}\n`;
+// ========== ENVÍO DE SMS (Twilio) ==========
+async function enviarSMS(telefono: string, mensaje: string, config: any): Promise<{ success: boolean; error?: string }> {
+  if (!config.smsActivo || !config.twilioAccountSid || !config.twilioAuthToken || !config.twilioPhoneNumber) {
+    return { success: false, error: 'SMS/Twilio no configurado o inactivo' };
   }
+  try {
+    const auth = Buffer.from(`${config.twilioAccountSid}:${config.twilioAuthToken}`).toString('base64');
+    const response = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${config.twilioAccountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ From: config.twilioPhoneNumber, To: telefono, Body: `Recordatorio: ${mensaje}` }),
+      }
+    );
+    const data = await response.json();
+    if (data.status === 'failed' || data.status === 'undelivered') {
+      return { success: false, error: data.error_message || 'Error al enviar SMS' };
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
 
-  mensaje += `\n---\n${config.nombreNegocio}`;
+// ========== ENDPOINT ==========
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { tipo, recordatorioId, testEmail, testTelegram, testSMS } = body;
 
-  return mensaje;
+    const config = await db.configuracion.findFirst();
+    if (!config) return NextResponse.json({ error: 'Configuración no encontrada' }, { status: 400 });
+
+    // Prueba Email
+    if (tipo === 'testEmail' && testEmail) {
+      const result = await enviarEmail(testEmail, 'Prueba de Email', 'Esta es una prueba del sistema de recordatorios.', config);
+      return NextResponse.json(result);
+    }
+
+    // Prueba Telegram
+    if (tipo === 'testTelegram' && testTelegram) {
+      const result = await enviarTelegram(testTelegram, 'Prueba de Telegram - Sistema de Recordatorios', config);
+      return NextResponse.json(result);
+    }
+
+    // Prueba SMS
+    if (tipo === 'testSMS' && testSMS) {
+      const result = await enviarSMS(testSMS, 'Prueba de SMS - Sistema de Recordatorios', config);
+      return NextResponse.json(result);
+    }
+
+    // Enviar un recordatorio específico
+    if (tipo === 'enviar' && recordatorioId) {
+      const recordatorio = await db.recordatorio.findUnique({ where: { id: recordatorioId } });
+      if (!recordatorio) return NextResponse.json({ error: 'Recordatorio no encontrado' }, { status: 404 });
+
+      const resultados: any = {};
+
+      if (recordatorio.enviarEmail && recordatorio.correo) {
+        const result = await enviarEmail(recordatorio.correo, recordatorio.asunto, recordatorio.mensaje, config);
+        resultados.email = result;
+        await db.envio.create({
+          data: { recordatorioId: recordatorio.id, canal: 'email', destinatario: recordatorio.correo, estado: result.success ? 'enviado' : 'error', error: result.error }
+        });
+      }
+
+      if (recordatorio.enviarTelegram && recordatorio.telegramId) {
+        const result = await enviarTelegram(recordatorio.telegramId, `${recordatorio.asunto}\n\n${recordatorio.mensaje}`, config);
+        resultados.telegram = result;
+        await db.envio.create({
+          data: { recordatorioId: recordatorio.id, canal: 'telegram', destinatario: recordatorio.telegramId, estado: result.success ? 'enviado' : 'error', error: result.error }
+        });
+      }
+
+      if (recordatorio.enviarSMS && recordatorio.numeroTelefono) {
+        const result = await enviarSMS(recordatorio.numeroTelefono, `${recordatorio.asunto}: ${recordatorio.mensaje}`, config);
+        resultados.sms = result;
+        await db.envio.create({
+          data: { recordatorioId: recordatorio.id, canal: 'sms', destinatario: recordatorio.numeroTelefono, estado: result.success ? 'enviado' : 'error', error: result.error }
+        });
+      }
+
+      const algunExito = Object.values(resultados).some((r: any) => r?.success);
+      await db.recordatorio.update({
+        where: { id: recordatorioId },
+        data: { estado: algunExito ? 'enviado' : 'error', ultimoIntento: new Date() }
+      });
+
+      return NextResponse.json({ success: true, resultados });
+    }
+
+    // Ejecución diaria
+    if (tipo === 'ejecutarDiario') {
+      const hoy = new Date();
+      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+      const fin = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 23, 59, 59);
+
+      const pendientes = await db.recordatorio.findMany({
+        where: { fechaRecordatorio: { gte: inicio, lte: fin }, estado: 'pendiente' }
+      });
+
+      console.log(`📅 Encontrados ${pendientes.length} recordatorios para hoy`);
+
+      for (const r of pendientes) {
+        if (r.enviarEmail && r.correo) {
+          const result = await enviarEmail(r.correo, r.asunto, r.mensaje, config);
+          await db.envio.create({ data: { recordatorioId: r.id, canal: 'email', destinatario: r.correo, estado: result.success ? 'enviado' : 'error', error: result.error } });
+        }
+        if (r.enviarTelegram && r.telegramId) {
+          const result = await enviarTelegram(r.telegramId, `${r.asunto}\n\n${r.mensaje}`, config);
+          await db.envio.create({ data: { recordatorioId: r.id, canal: 'telegram', destinatario: r.telegramId, estado: result.success ? 'enviado' : 'error', error: result.error } });
+        }
+        if (r.enviarSMS && r.numeroTelefono) {
+          const result = await enviarSMS(r.numeroTelefono, `${r.asunto}: ${r.mensaje}`, config);
+          await db.envio.create({ data: { recordatorioId: r.id, canal: 'sms', destinatario: r.numeroTelefono, estado: result.success ? 'enviado' : 'error', error: result.error } });
+        }
+        await db.recordatorio.update({ where: { id: r.id }, data: { estado: 'enviado', ultimoIntento: new Date() } });
+      }
+
+      return NextResponse.json({ success: true, procesados: pendientes.length });
+    }
+
+    return NextResponse.json({ error: 'Tipo de operación no válido' }, { status: 400 });
+  } catch (error) {
+    console.error('Error en envío:', error);
+    return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
+  }
 }
