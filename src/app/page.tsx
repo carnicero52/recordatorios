@@ -280,7 +280,11 @@ function ModalRecordatorio({ recordatorio, cerrar, cargar }: { recordatorio: Rec
             <div><label className="block text-sm text-neutral-400 mb-2">Asunto *</label><input value={data.asunto} onChange={e => setData({ ...data, asunto: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="Recordatorio" /></div>
             <div><label className="block text-sm text-neutral-400 mb-2">Mensaje *</label><textarea value={data.mensaje} onChange={e => setData({ ...data, mensaje: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50 resize-none" rows={4} placeholder="Escribe el mensaje..." /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className="block text-sm text-neutral-400 mb-2">Telegram ID</label><input value={data.telegramId} onChange={e => setData({ ...data, telegramId: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="123456789" /></div>
+              <div>
+                <label className="block text-sm text-neutral-400 mb-2">Telegram ID</label>
+                <input value={data.telegramId} onChange={e => setData({ ...data, telegramId: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="123456789" />
+                <p className="text-xs text-amber-400 mt-1">Usa @userinfobot para obtener tu ID. El usuario debe enviar /start al bot primero.</p>
+              </div>
               <div><label className="block text-sm text-neutral-400 mb-2">Teléfono SMS</label><input value={data.numeroTelefono} onChange={e => setData({ ...data, numeroTelefono: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="+521234567890" /></div>
             </div>
             <div><label className="block text-sm text-neutral-400 mb-3">Canales</label><div className="flex flex-wrap gap-4">
@@ -401,6 +405,18 @@ function ConfigSection({ config, cargar }: { config: Config | null; cargar: () =
           <div className="flex items-center gap-4"><div className="p-3 bg-blue-500/10 rounded-xl"><Mail className="w-6 h-6 text-blue-400" /></div><div><h3 className="font-semibold text-lg">Gmail</h3><p className="text-sm text-neutral-500">Correos electrónicos</p></div></div>
           <div className="flex items-center gap-4">{config?.gmailConfigurado && <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-3 py-1 rounded-full"><Check className="w-3 h-3" /> Guardado</span>}<label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={data.gmailActivo} onChange={e => setData({ ...data, gmailActivo: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><span className="text-sm">Activo</span></label></div>
         </div>
+
+        {/* Instrucciones importantes */}
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 mb-4">
+          <p className="text-sm text-blue-300 font-medium mb-2">📧 Requisitos para cada cuenta Gmail:</p>
+          <ol className="text-sm text-neutral-300 space-y-1 list-decimal list-inside">
+            <li>Activar <strong>Verificación en 2 pasos</strong> en Google</li>
+            <li>Generar una <strong>Contraseña de aplicación</strong> en Google Account</li>
+            <li>Usar esa contraseña de 16 caracteres aquí (NO la contraseña normal)</li>
+          </ol>
+          <p className="text-xs text-neutral-500 mt-2">Cada cuenta de Gmail necesita su propia contraseña de aplicación.</p>
+        </div>
+
         <div className="space-y-4">
           <div><label className="block text-sm text-neutral-400 mb-2">Correo Gmail</label><input type="email" placeholder="tucorreo@gmail.com" value={data.gmailEmail} onChange={e => setData({ ...data, gmailEmail: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
           <div><label className="block text-sm text-neutral-400 mb-2">App Password {config?.gmailConfigurado && <span className="text-green-400 text-xs">(vacío = mantener)</span>}</label><input type="password" placeholder="App Password" value={data.gmailPassword} onChange={e => setData({ ...data, gmailPassword: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
@@ -414,6 +430,18 @@ function ConfigSection({ config, cargar }: { config: Config | null; cargar: () =
           <div className="flex items-center gap-4"><div className="p-3 bg-cyan-500/10 rounded-xl"><MessageSquare className="w-6 h-6 text-cyan-400" /></div><div><h3 className="font-semibold text-lg">Telegram</h3><p className="text-sm text-neutral-500">Bot de Telegram</p></div></div>
           <div className="flex items-center gap-4">{config?.telegramConfigurado && <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-3 py-1 rounded-full"><Check className="w-3 h-3" /> Guardado</span>}<label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={data.telegramActivo} onChange={e => setData({ ...data, telegramActivo: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><span className="text-sm">Activo</span></label></div>
         </div>
+
+        {/* Instrucciones importantes */}
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-4">
+          <p className="text-sm text-amber-300 font-medium mb-2">⚠️ IMPORTANTE - Para recibir mensajes:</p>
+          <ol className="text-sm text-neutral-300 space-y-1 list-decimal list-inside">
+            <li>Cada usuario debe buscar el bot en Telegram</li>
+            <li>Enviar <code className="bg-neutral-800 px-1 rounded">/start</code> al bot PRIMERO</li>
+            <li>Usar @userinfobot para obtener el Chat ID</li>
+          </ol>
+          <p className="text-xs text-neutral-500 mt-2">Un bot NO puede escribir a usuarios que no lo han contactado primero.</p>
+        </div>
+
         <div className="space-y-4">
           <div><label className="block text-sm text-neutral-400 mb-2">Bot Token {config?.telegramConfigurado && <span className="text-green-400 text-xs">(vacío = mantener)</span>}</label><input type="password" placeholder="123456789:ABC..." value={data.telegramBotToken} onChange={e => setData({ ...data, telegramBotToken: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
           <button onClick={probarTelegram} disabled={testing === 'telegram'} className="px-5 py-2.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl hover:bg-cyan-500/20 disabled:opacity-50 text-sm font-medium">{testing === 'telegram' ? 'Enviando...' : 'Probar Telegram'}</button>
