@@ -21,10 +21,13 @@ export async function GET() {
       gmailEmail: config.gmailEmail || '',
       gmailActivo: config.gmailActivo,
       gmailConfigurado: !!(config.gmailEmail && config.gmailPassword),
+      // Debug: mostrar si hay password y su longitud
+      _debug_gmailPasswordLength: config.gmailPassword?.length || 0,
 
       // Telegram
       telegramActivo: config.telegramActivo,
       telegramConfigurado: !!config.telegramBotToken,
+      _debug_telegramTokenLength: config.telegramBotToken?.length || 0,
 
       // SMS
       smsActivo: config.smsActivo,
@@ -41,17 +44,17 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const data = await request.json();
-    
+
     console.log('='.repeat(50));
     console.log('📥 PATCH /api/configuracion');
     console.log('Datos recibidos:', JSON.stringify({
       gmailEmail: data.gmailEmail,
-      gmailPassword: data.gmailPassword ? `[${data.gmailPassword.length} chars]` : 'empty/null',
+      gmailPassword: data.gmailPassword ? `[${data.gmailPassword.length} chars]: "${data.gmailPassword.substring(0, 4)}..."` : 'empty/null',
       telegramBotToken: data.telegramBotToken ? `[${data.telegramBotToken.length} chars]` : 'empty/null',
       gmailActivo: data.gmailActivo,
       telegramActivo: data.telegramActivo,
     }));
-    
+
     let config = await db.configuracion.findFirst();
 
     const updateData: any = {
@@ -67,21 +70,21 @@ export async function PATCH(request: Request) {
     // Solo actualizar contraseñas/tokens si vienen con valor NO vacío
     const gmailPassword = data.gmailPassword?.trim();
     const telegramBotToken = data.telegramBotToken?.trim();
-    
+
     if (gmailPassword && gmailPassword.length > 0) {
       updateData.gmailPassword = gmailPassword;
-      console.log('✅ Se actualizará gmailPassword');
+      console.log('✅ Se actualizará gmailPassword (' + gmailPassword.length + ' caracteres)');
     } else {
       console.log('⏭️ No se actualizará gmailPassword (vacío o no enviado)');
     }
-    
+
     if (telegramBotToken && telegramBotToken.length > 0) {
       updateData.telegramBotToken = telegramBotToken;
-      console.log('✅ Se actualizará telegramBotToken');
+      console.log('✅ Se actualizará telegramBotToken (' + telegramBotToken.length + ' caracteres)');
     } else {
       console.log('⏭️ No se actualizará telegramBotToken (vacío o no enviado)');
     }
-    
+
     if (data.twilioAccountSid) {
       updateData.twilioAccountSid = data.twilioAccountSid;
     }
@@ -95,9 +98,9 @@ export async function PATCH(request: Request) {
       config = await db.configuracion.create({ data: updateData });
       console.log('➕ Nuevo registro creado');
     } else {
-      config = await db.configuracion.update({ 
-        where: { id: config.id }, 
-        data: updateData 
+      config = await db.configuracion.update({
+        where: { id: config.id },
+        data: updateData
       });
       console.log('📝 Registro actualizado');
     }
@@ -106,11 +109,19 @@ export async function PATCH(request: Request) {
     const verificado = await db.configuracion.findFirst();
     console.log('🔍 Verificación post-guardado:');
     console.log('   - gmailEmail:', verificado?.gmailEmail || '(vacío)');
-    console.log('   - gmailPassword:', verificado?.gmailPassword ? '✓ CONFIGURADO' : '✗ NO CONFIGURADO');
-    console.log('   - telegramBotToken:', verificado?.telegramBotToken ? '✓ CONFIGURADO' : '✗ NO CONFIGURADO');
+    console.log('   - gmailPassword:', verificado?.gmailPassword ? `✓ CONFIGURADO (${verificado.gmailPassword.length} chars)` : '✗ NO CONFIGURADO');
+    console.log('   - telegramBotToken:', verificado?.telegramBotToken ? `✓ CONFIGURADO (${verificado.telegramBotToken.length} chars)` : '✗ NO CONFIGURADO');
     console.log('='.repeat(50));
 
-    return NextResponse.json({ success: true, message: 'Configuración guardada' });
+    return NextResponse.json({
+      success: true,
+      message: 'Configuración guardada',
+      _debug: {
+        gmailEmail: verificado?.gmailEmail,
+        gmailPasswordSaved: !!verificado?.gmailPassword,
+        gmailPasswordLength: verificado?.gmailPassword?.length || 0
+      }
+    });
   } catch (error) {
     console.error('❌ Error PATCH config:', error);
     return NextResponse.json({ error: 'Error al guardar' }, { status: 500 });
