@@ -7,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Configuración del sistema
 model Configuracion {
   id                String   @id @default(cuid())
   nombreSistema     String   @default("Sistema de Recordatorios Multicanal")
@@ -34,37 +33,28 @@ model Configuracion {
   updatedAt         DateTime @updatedAt
 }
 
-// Recordatorios
 model Recordatorio {
   id                String   @id @default(cuid())
-
   nombre            String
   correo            String
   fechaRecordatorio DateTime
   asunto            String
   mensaje           String
-
   telegramId        String?
   numeroTelefono    String?
-
   estado            String   @default("pendiente")
   ultimoIntento     DateTime?
   errorMensaje      String?
-
   enviarEmail       Boolean  @default(true)
   enviarTelegram    Boolean  @default(false)
   enviarSMS         Boolean  @default(false)
-
   repetir           Boolean  @default(false)
   frecuencia        String?
-
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-
   envios            Envio[]
 }
 
-// Historial de envíos
 model Envio {
   id              String   @id @default(cuid())
   recordatorioId  String
@@ -76,7 +66,6 @@ model Envio {
   enviadoAt       DateTime @default(now())
 }
 
-// Administradores
 model Admin {
   id        String   @id @default(cuid())
   username  String   @unique

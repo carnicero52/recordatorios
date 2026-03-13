@@ -8,7 +8,6 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
-// Configuración del sistema
 model Configuracion {
   id                String   @id @default(cuid())
   nombreSistema     String   @default("Sistema de Recordatorios Multicanal")
@@ -22,50 +21,41 @@ model Configuracion {
   telegramBotToken  String?
   telegramActivo    Boolean  @default(false)
 
-  // Twilio SMS
+  // SMS (Twilio)
   twilioAccountSid  String?
   twilioAuthToken   String?
   twilioPhoneNumber String?
   smsActivo         Boolean  @default(false)
 
-  // Horario de ejecución
+  // Horario
   horaEjecucion     String   @default("09:00")
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
 
-// Recordatorios
 model Recordatorio {
   id                String   @id @default(cuid())
-
   nombre            String
   correo            String
   fechaRecordatorio DateTime
   asunto            String
   mensaje           String
-
   telegramId        String?
   numeroTelefono    String?
-
   estado            String   @default("pendiente")
   ultimoIntento     DateTime?
   errorMensaje      String?
-
   enviarEmail       Boolean  @default(true)
   enviarTelegram    Boolean  @default(false)
   enviarSMS         Boolean  @default(false)
-
   repetir           Boolean  @default(false)
   frecuencia        String?
-
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-
   envios            Envio[]
 }
 
-// Historial de envíos
 model Envio {
   id              String   @id @default(cuid())
   recordatorioId  String
@@ -77,7 +67,6 @@ model Envio {
   enviadoAt       DateTime @default(now())
 }
 
-// Administradores
 model Admin {
   id        String   @id @default(cuid())
   username  String   @unique
