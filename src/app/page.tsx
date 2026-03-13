@@ -234,7 +234,7 @@ function RecordatoriosSection({ recordatorios, cargar }: { recordatorios: Record
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-neutral-400">
                   <span className="flex items-center gap-1.5"><Mail className="w-4 h-4" />{r.correo}</span>
                   <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" />{formatearFecha(r.fechaRecordatorio)}</span>
-                  <span className="flex items-center gap-2">{r.enviarEmail && <Mail className="w-4 h-4 text-blue-400" title="Email" />}{r.enviarTelegram && <MessageSquare className="w-4 h-4 text-cyan-400" title="Telegram" />}{r.enviarSMS && <Phone className="w-4 h-4 text-green-400" title="SMS" />}</span>
+                  <span className="flex items-center gap-2">{r.enviarEmail && <span title="Email"><Mail className="w-4 h-4 text-blue-400" /></span>}{r.enviarTelegram && <span title="Telegram"><MessageSquare className="w-4 h-4 text-cyan-400" /></span>}{r.enviarSMS && <span title="SMS"><Phone className="w-4 h-4 text-green-400" /></span>}</span>
                 </div>
                 <p className="text-sm text-neutral-500 mt-2 truncate">{r.asunto}</p>
               </div>
