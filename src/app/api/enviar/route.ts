@@ -39,11 +39,7 @@ async function enviarTelegram(chatId: string, mensaje: string, config: any) {
     const res = await fetch(`https://api.telegram.org/bot${config.telegramBotToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: `🔔 *Recordatorio*\n\n${mensaje}`,
-        parse_mode: 'Markdown'
-      })
+      body: JSON.stringify({ chat_id: chatId, text: `🔔 *Recordatorio*\n\n${mensaje}`, parse_mode: 'Markdown' })
     });
     const data = await res.json();
     return data.ok ? { success: true } : { success: false, error: data.description || 'Error' };
@@ -63,12 +59,18 @@ export async function POST(request: Request) {
 
     // Test Email
     if (tipo === 'testEmail' && testEmail) {
-      return NextResponse.json(await enviarEmail(testEmail, 'Prueba - Recordatorios', 'Esta es una prueba del sistema.', config));
+      console.log('📧 Probando email a:', testEmail);
+      const result = await enviarEmail(testEmail, 'Prueba - Sistema de Recordatorios', 'Si recibes este mensaje, Gmail está configurado correctamente.', config);
+      console.log('📤 Resultado:', result);
+      return NextResponse.json(result);
     }
 
     // Test Telegram
     if (tipo === 'testTelegram' && testTelegram) {
-      return NextResponse.json(await enviarTelegram(testTelegram, 'Prueba de Telegram\n\nSi ves esto, Telegram funciona correctamente.', config));
+      console.log('📱 Probando Telegram a:', testTelegram);
+      const result = await enviarTelegram(testTelegram, 'Prueba de Telegram\n\nSi ves este mensaje, Telegram funciona correctamente.', config);
+      console.log('📤 Resultado:', result);
+      return NextResponse.json(result);
     }
 
     // Enviar recordatorio específico

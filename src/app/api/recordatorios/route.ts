@@ -6,16 +6,11 @@ export async function GET() {
   try {
     const recordatorios = await db.recordatorio.findMany({
       orderBy: { fechaRecordatorio: 'asc' },
-      include: {
-        envios: {
-          orderBy: { enviadoAt: 'desc' },
-          take: 10
-        }
-      }
+      include: { envios: { orderBy: { enviadoAt: 'desc' }, take: 5 } }
     });
     return NextResponse.json(recordatorios);
   } catch (error) {
-    console.error('Error listando recordatorios:', error);
+    console.error('Error:', error);
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
   }
 }
@@ -24,7 +19,6 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-
     const recordatorio = await db.recordatorio.create({
       data: {
         nombre: data.nombre,
@@ -41,10 +35,9 @@ export async function POST(request: Request) {
         frecuencia: data.frecuencia || null,
       }
     });
-
     return NextResponse.json(recordatorio);
   } catch (error) {
-    console.error('Error creando recordatorio:', error);
-    return NextResponse.json({ error: 'Error al crear recordatorio' }, { status: 500 });
+    console.error('Error:', error);
+    return NextResponse.json({ error: 'Error al crear' }, { status: 500 });
   }
 }

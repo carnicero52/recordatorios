@@ -32,7 +32,7 @@ export async function GET() {
       twilioPhoneNumber: config.twilioPhoneNumber || '',
     });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error GET config:', error);
     return NextResponse.json({ error: 'Error del servidor' }, { status: 500 });
   }
 }
@@ -41,6 +41,12 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const data = await request.json();
+    console.log('📥 Actualizando configuración:', { 
+      gmailEmail: data.gmailEmail,
+      tienePassword: !!data.gmailPassword,
+      telegramActivo: data.telegramActivo 
+    });
+
     let config = await db.configuracion.findFirst();
 
     const updateData: any = {
@@ -53,21 +59,42 @@ export async function PATCH(request: Request) {
       twilioPhoneNumber: data.twilioPhoneNumber,
     };
 
-    // Solo actualizar contraseñas si vienen con valor
-    if (data.gmailPassword?.trim()) updateData.gmailPassword = data.gmailPassword.trim();
-    if (data.telegramBotToken?.trim()) updateData.telegramBotToken = data.telegramBotToken.trim();
-    if (data.twilioAccountSid) updateData.twilioAccountSid = data.twilioAccountSid;
-    if (data.twilioAuthToken?.trim()) updateData.twilioAuthToken = data.twilioAuthToken.trim();
+    // Solo actualizar contraseñas/tokens si vienen con valor NO vacío
+    if (data.gmailPassword && data.gmailPassword.trim() !== '') {
+      updateData.gmailPassword = data.gmailPassword.trim();
+      console.log('✅ Actualizando gmailPassword');
+    }
+    if (data.telegramBotToken && data.telegramBotToken.trim() !== '') {
+      updateData.telegramBotToken = data.telegramBotToken.trim();
+      console.log('✅ Actualizando telegramBotToken');
+    }
+    if (data.twilioAccountSid) {
+      updateData.twilioAccountSid = data.twilioAccountSid;
+    }
+    if (data.twilioAuthToken && data.twilioAuthToken.trim() !== '') {
+      updateData.twilioAuthToken = data.twilioAuthToken.trim();
+    }
 
     if (!config) {
       config = await db.configuracion.create({ data: updateData });
     } else {
-      config = await db.configuracion.update({ where: { id: config.id }, data: updateData });
+      config = await db.configuracion.update({ 
+        where: { id: config.id }, 
+        data: updateData 
+      });
     }
 
-    return NextResponse.json({ success: true });
+    // Verificar que se guardó
+    const verificado = await db.configuracion.findFirst();
+    console.log('🔍 Verificación:', {
+      gmailEmail: verificado?.gmailEmail,
+      tieneGmailPassword: !!verificado?.gmailPassword,
+      tieneTelegramToken: !!verificado?.telegramBotToken
+    });
+
+    return NextResponse.json({ success: true, message: 'Configuración guardada' });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error PATCH config:', error);
     return NextResponse.json({ error: 'Error al guardar' }, { status: 500 });
   }
 }

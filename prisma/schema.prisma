@@ -10,7 +10,7 @@ datasource db {
 // Configuración del sistema
 model Configuracion {
   id                String   @id @default(cuid())
-  nombreSistema     String   @default("Sistema de Recordatorios")
+  nombreSistema     String   @default("Sistema de Recordatorios Multicanal")
 
   // Gmail SMTP
   gmailEmail        String?
@@ -21,13 +21,13 @@ model Configuracion {
   telegramBotToken  String?
   telegramActivo    Boolean  @default(false)
 
-  // Twilio SMS
+  // SMS (Twilio)
   twilioAccountSid  String?
   twilioAuthToken   String?
   twilioPhoneNumber String?
   smsActivo         Boolean  @default(false)
 
-  // Horario de ejecución
+  // Horario
   horaEjecucion     String   @default("09:00")
 
   createdAt         DateTime @default(now())
