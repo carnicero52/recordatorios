@@ -342,10 +342,16 @@ function ConfigSection({ config, cargar }: { config: Config | null; cargar: () =
   const [data, setData] = useState({ gmailEmail: '', gmailPassword: '', gmailActivo: false, telegramBotToken: '', telegramActivo: false, twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '', smsActivo: false, horaEjecucion: '09:00' });
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
     if (config) {
       setData({ gmailEmail: config.gmailEmail || '', gmailPassword: '', gmailActivo: config.gmailActivo, telegramBotToken: '', telegramActivo: config.telegramActivo, twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: config.twilioPhoneNumber || '', smsActivo: config.smsActivo, horaEjecucion: config.horaEjecucion || '09:00' });
+      // Mostrar info de debug
+      setDebugInfo({
+        gmailPasswordLength: (config as any)._debug_gmailPasswordLength,
+        telegramTokenLength: (config as any)._debug_telegramTokenLength
+      });
     }
   }, [config]);
 
@@ -354,7 +360,17 @@ function ConfigSection({ config, cargar }: { config: Config | null; cargar: () =
     try {
       const res = await fetch('/api/configuracion', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const d = await res.json();
-      alert(d.success ? '✅ Guardado' : `❌ Error: ${d.error}`);
+
+      // Mostrar respuesta de debug
+      if (d._debug) {
+        console.log('Debug info:', d._debug);
+        alert(d.success
+          ? `✅ Guardado\n\n📧 Email: ${d._debug.gmailEmail}\n🔑 Password guardado: ${d._debug.gmailPasswordSaved ? 'Sí' : 'No'}\n📏 Longitud: ${d._debug.gmailPasswordLength} caracteres`
+          : `❌ Error: ${d.error}`);
+      } else {
+        alert(d.success ? '✅ Guardado' : `❌ Error: ${d.error}`);
+      }
+
       if (d.success) cargar();
     } catch { alert('Error'); }
     finally { setSaving(false); }
@@ -431,7 +447,15 @@ function ConfigSection({ config, cargar }: { config: Config | null; cargar: () =
 
         <div className="space-y-4">
           <div><label className="block text-sm text-neutral-400 mb-2">Correo Gmail</label><input type="email" placeholder="tucorreo@gmail.com" value={data.gmailEmail} onChange={e => setData({ ...data, gmailEmail: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
-          <div><label className="block text-sm text-neutral-400 mb-2">App Password {config?.gmailConfigurado && <span className="text-green-400 text-xs">(vacío = mantener)</span>}</label><input type="password" placeholder="App Password" value={data.gmailPassword} onChange={e => setData({ ...data, gmailPassword: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
+          <div>
+            <label className="block text-sm text-neutral-400 mb-2">
+              App Password {config?.gmailConfigurado && <span className="text-green-400 text-xs">(vacío = mantener)</span>}
+            </label>
+            <input type="password" placeholder="App Password de 16 caracteres" value={data.gmailPassword} onChange={e => setData({ ...data, gmailPassword: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" />
+            {debugInfo?.gmailPasswordLength > 0 && (
+              <p className="text-xs text-neutral-500 mt-1">🔑 Password guardado: {debugInfo.gmailPasswordLength} caracteres</p>
+            )}
+          </div>
           <button onClick={probarEmail} disabled={testing === 'email'} className="px-5 py-2.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 disabled:opacity-50 text-sm font-medium">{testing === 'email' ? 'Enviando...' : 'Probar Email'}</button>
         </div>
       </div>
