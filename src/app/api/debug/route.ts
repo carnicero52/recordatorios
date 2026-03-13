@@ -19,41 +19,26 @@ export async function GET() {
     await db.$connect();
     debug.database = { connected: true };
 
-    // Verificar tablas
-    const tablas = await db.$queryRaw`
-      SELECT table_name FROM information_schema.tables 
-      WHERE table_schema = 'public'
-    `;
-    debug.database.tables = tablas;
+    // Verificar configuración actual
+    const config = await db.configuracion.findFirst();
+    debug.config = {
+      id: config?.id,
+      gmailEmail: config?.gmailEmail,
+      gmailActivo: config?.gmailActivo,
+      gmailPasswordLength: config?.gmailPassword?.length || 0,
+      telegramActivo: config?.telegramActivo,
+      telegramTokenLength: config?.telegramBotToken?.length || 0,
+    };
 
     // Verificar admin
     const admin = await db.admin.findFirst();
-    debug.database.admin = admin ? {
+    debug.admin = admin ? {
       id: admin.id,
       username: admin.username,
       nombre: admin.nombre,
-      passwordLength: admin.password.length,
-      passwordPrefix: admin.password.substring(0, 10) + '...',
-      activo: admin.activo
+      activo: admin.activo,
+      rol: admin.rol
     } : null;
-
-    // Probar bcrypt
-    if (admin) {
-      const testPassword = 'admin123';
-      const passwordMatch = await bcrypt.compare(testPassword, admin.password);
-      debug.database.passwordTest = {
-        testPassword,
-        matches: passwordMatch
-      };
-
-      // Generar nuevo hash
-      const newHash = await bcrypt.hash(testPassword, 10);
-      debug.database.newHash = newHash;
-    }
-
-    // Verificar configuración
-    const configCount = await db.configuracion.count();
-    debug.database.configCount = configCount;
 
   } catch (error: any) {
     debug.database = {
@@ -65,4 +50,41 @@ export async function GET() {
   }
 
   return NextResponse.json(debug, { status: 200 });
+}
+
+// POST para probar guardar contraseña directamente
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { gmailEmail, gmailPassword } = body;
+
+    const { db } = await import('@/lib/db');
+    
+    const config = await db.configuracion.findFirst();
+    if (!config) {
+      return NextResponse.json({ error: 'No hay configuración' }, { status: 400 });
+    }
+
+    const updated = await db.configuracion.update({
+      where: { id: config.id },
+      data: {
+        gmailEmail: gmailEmail || config.gmailEmail,
+        gmailPassword: gmailPassword || config.gmailPassword,
+        gmailActivo: true
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      saved: {
+        gmailEmail: updated.gmailEmail,
+        gmailPasswordLength: updated.gmailPassword?.length || 0
+      }
+    });
+  } catch (error: any) {
+    return NextResponse.json({
+      success: false,
+      error: error.message
+    }, { status: 500 });
+  }
 }
