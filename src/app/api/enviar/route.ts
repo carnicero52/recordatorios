@@ -4,14 +4,32 @@ import nodemailer from 'nodemailer';
 
 // ========== ENVÍO DE EMAIL ==========
 async function enviarEmail(to: string, asunto: string, mensaje: string, config: any) {
-  if (!config.gmailActivo || !config.gmailEmail || !config.gmailPassword) {
-    return { success: false, error: 'Gmail no configurado o inactivo' };
+  console.log('📧 Intentando enviar email...');
+  console.log('   - Configurado:', config.gmailEmail);
+  console.log('   - Password length:', config.gmailPassword?.length || 0);
+  console.log('   - Activo:', config.gmailActivo);
+
+  if (!config.gmailActivo) {
+    return { success: false, error: 'Gmail está desactivado. Activa Gmail en Configuración.' };
   }
+  if (!config.gmailEmail) {
+    return { success: false, error: 'No hay correo Gmail configurado.' };
+  }
+  if (!config.gmailPassword) {
+    return { success: false, error: 'No hay contraseña de aplicación configurada.' };
+  }
+
   try {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: { user: config.gmailEmail, pass: config.gmailPassword }
     });
+
+    // Verificar conexión antes de enviar
+    console.log('🔌 Verificando conexión SMTP...');
+    await transporter.verify();
+    console.log('✅ Conexión SMTP verificada');
+
     await transporter.sendMail({
       from: config.gmailEmail,
       to,
@@ -26,7 +44,19 @@ async function enviarEmail(to: string, asunto: string, mensaje: string, config: 
     });
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    console.error('❌ Error enviando email:', error);
+    
+    // Errores comunes de Gmail
+    let errorMsg = error.message;
+    if (error.code === 'EAUTH') {
+      errorMsg = '❌ Autenticación fallida. La contraseña de aplicación NO es válida para este correo. Verifica que sea una contraseña de aplicación de 16 caracteres generada en myaccount.google.com/apppasswords';
+    } else if (error.code === 'ECONNECTION') {
+      errorMsg = '❌ No se pudo conectar a Gmail. Verifica tu conexión a internet.';
+    } else if (error.responseCode === 535) {
+      errorMsg = '❌ Credenciales incorrectas. Asegúrate de usar una CONTRASEÑA DE APLICACIÓN, no tu contraseña normal de Gmail.';
+    }
+    
+    return { success: false, error: errorMsg, code: error.code };
   }
 }
 

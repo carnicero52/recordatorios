@@ -366,19 +366,31 @@ function ConfigSection({ config, cargar }: { config: Config | null; cargar: () =
     try {
       const res = await fetch('/api/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'testEmail', testEmail: email }) });
       const d = await res.json();
-      alert(d.success ? '✅ Enviado' : `❌ Error: ${d.error}`);
-    } catch { alert('Error'); }
+      if (d.success) {
+        alert('✅ Email enviado correctamente a ' + email);
+      } else {
+        alert('❌ Error:\n\n' + d.error + (d.code ? '\n\nCódigo: ' + d.code : ''));
+      }
+    } catch (e: any) {
+      alert('Error de conexión: ' + e.message);
+    }
     finally { setTesting(null); }
   };
 
   const probarTelegram = async () => {
-    const chatId = prompt('Chat ID:'); if (!chatId) return;
+    const chatId = prompt('Chat ID de Telegram:'); if (!chatId) return;
     setTesting('telegram');
     try {
       const res = await fetch('/api/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'testTelegram', testTelegram: chatId }) });
       const d = await res.json();
-      alert(d.success ? '✅ Enviado' : `❌ Error: ${d.error}`);
-    } catch { alert('Error'); }
+      if (d.success) {
+        alert('✅ Mensaje de Telegram enviado');
+      } else {
+        alert('❌ Error:\n\n' + d.error);
+      }
+    } catch (e: any) {
+      alert('Error de conexión: ' + e.message);
+    }
     finally { setTesting(null); }
   };
 
