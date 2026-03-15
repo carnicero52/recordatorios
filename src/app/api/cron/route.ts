@@ -99,26 +99,28 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Sin configuración' }, { status: 400 });
     }
 
-    // Buscar recordatorios para HOY
-    const hoy = new Date();
-    const inicioDelDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-    const finDelDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 23, 59, 59);
+    // Buscar recordatorios para la HORA EXACTA (ventana de 2 minutos)
+    const ahora = new Date();
+    const haceUnMinuto = new Date(ahora.getTime() - 60 * 1000);
+    const enUnMinuto = new Date(ahora.getTime() + 60 * 1000);
 
-    const recordatoriosHoy = await db.recordatorio.findMany({
+    console.log(`🕐 Verificando recordatorios entre ${haceUnMinuto.toISOString()} y ${enUnMinuto.toISOString()}`);
+
+    const recordatoriosAhora = await db.recordatorio.findMany({
       where: {
         fechaRecordatorio: {
-          gte: inicioDelDia,
-          lte: finDelDia
+          gte: haceUnMinuto,
+          lte: enUnMinuto
         },
         estado: 'pendiente'
       }
     });
 
-    console.log(`📅 Encontrados ${recordatoriosHoy.length} recordatorios para hoy`);
+    console.log(`📅 Encontrados ${recordatoriosAhora.length} recordatorios para enviar ahora`);
 
     const resultados = [];
 
-    for (const r of recordatoriosHoy) {
+    for (const r of recordatoriosAhora) {
       let enviado = false;
       const errores: string[] = [];
 
@@ -199,8 +201,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      fecha: hoy.toISOString(),
-      procesados: recordatoriosHoy.length,
+      fecha: ahora.toISOString(),
+      procesados: recordatoriosAhora.length,
       resultados
     });
 
