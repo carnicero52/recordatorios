@@ -78,6 +78,29 @@ async function enviarTelegram(chatId: string, mensaje: string, config: any) {
   }
 }
 
+// ========== ENVÍO DE WHATSAPP (CallMeBot) - GRATIS ==========
+async function enviarWhatsApp(mensaje: string, config: any) {
+  if (!config.callmebotActivo || !config.callmebotApiKey || !config.callmebotPhone) {
+    return { success: false, error: 'WhatsApp no configurado o inactivo' };
+  }
+  try {
+    const url = `https://api.callmebot.com/whatsapp.php?` +
+      `phone=${config.callmebotPhone}&` +
+      `text=${encodeURIComponent(`🔔 *Recordatorio*\n\n${mensaje}`)}&` +
+      `apikey=${config.callmebotApiKey}`;
+    
+    const res = await fetch(url);
+    const text = await res.text();
+    
+    if (!res.ok || text.includes('error')) {
+      return { success: false, error: text || 'Error al enviar WhatsApp' };
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 // ========== ENDPOINT ==========
 export async function POST(request: Request) {
   try {
@@ -99,6 +122,14 @@ export async function POST(request: Request) {
     if (tipo === 'testTelegram' && testTelegram) {
       console.log('📱 Probando Telegram a:', testTelegram);
       const result = await enviarTelegram(testTelegram, 'Prueba de Telegram\n\nSi ves este mensaje, Telegram funciona correctamente.', config);
+      console.log('📤 Resultado:', result);
+      return NextResponse.json(result);
+    }
+
+    // Test WhatsApp
+    if (tipo === 'testWhatsApp') {
+      console.log('📱 Probando WhatsApp...');
+      const result = await enviarWhatsApp('Prueba de WhatsApp\n\nSi ves este mensaje, WhatsApp funciona correctamente!', config);
       console.log('📤 Resultado:', result);
       return NextResponse.json(result);
     }

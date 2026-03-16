@@ -81,6 +81,29 @@ async function enviarSMS(telefono: string, mensaje: string, config: any): Promis
   }
 }
 
+// ========== ENVÍO DE WHATSAPP (CallMeBot) - GRATIS ==========
+async function enviarWhatsApp(mensaje: string, config: any): Promise<{ success: boolean; error?: string }> {
+  if (!config.callmebotActivo || !config.callmebotApiKey || !config.callmebotPhone) {
+    return { success: false, error: 'WhatsApp no configurado o inactivo' };
+  }
+  try {
+    const url = `https://api.callmebot.com/whatsapp.php?` +
+      `phone=${config.callmebotPhone}&` +
+      `text=${encodeURIComponent(`🔔 *Recordatorio*\n\n${mensaje}`)}&` +
+      `apikey=${config.callmebotApiKey}`;
+    
+    const response = await fetch(url);
+    const text = await response.text();
+    
+    if (!response.ok || text.includes('error')) {
+      return { success: false, error: text || 'Error al enviar WhatsApp' };
+    }
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 // ========== ENDPOINT CRON ==========
 export async function GET(request: Request) {
   try {
@@ -175,6 +198,25 @@ export async function GET(request: Request) {
             recordatorioId: r.id,
             canal: 'sms',
             destinatario: r.numeroTelefono,
+            estado: result.success ? 'enviado' : 'error',
+            error: result.error
+          }
+        });
+      }
+
+      // Enviar WhatsApp (CallMeBot) - GRATIS
+      if (r.enviarWhatsApp && config.callmebotActivo) {
+        const result = await enviarWhatsApp(`${r.asunto}\n\n${r.mensaje}`, config);
+        if (result.success) {
+          enviado = true;
+        } else {
+          errores.push(`WhatsApp: ${result.error}`);
+        }
+        await db.envio.create({
+          data: {
+            recordatorioId: r.id,
+            canal: 'whatsapp',
+            destinatario: config.callmebotPhone,
             estado: result.success ? 'enviado' : 'error',
             error: result.error
           }

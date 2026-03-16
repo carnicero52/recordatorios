@@ -26,6 +26,11 @@ model Configuracion {
   twilioPhoneNumber String?
   smsActivo         Boolean  @default(false)
 
+  // WhatsApp (CallMeBot) - GRATIS
+  callmebotApiKey      String?
+  callmebotPhone      String?
+  callmebotActivo    Boolean  @default(false)
+
   // Horario
   horaEjecucion     String   @default("09:00")
 
@@ -48,6 +53,7 @@ model Recordatorio {
   enviarEmail       Boolean  @default(true)
   enviarTelegram    Boolean  @default(false)
   enviarSMS         Boolean  @default(false)
+  enviarWhatsApp   Boolean  @default(false)
   repetir           Boolean  @default(false)
   frecuencia        String?
   createdAt         DateTime @default(now())

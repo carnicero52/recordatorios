@@ -16,6 +16,10 @@ interface Config {
   smsActivo: boolean;
   smsConfigurado: boolean;
   twilioPhoneNumber: string;
+  // WhatsApp (CallMeBot)
+  callmebotActivo: boolean;
+  callmebotPhone: string;
+  callmebotConfigurado: boolean;
 }
 
 interface Recordatorio {
@@ -31,6 +35,7 @@ interface Recordatorio {
   enviarEmail: boolean;
   enviarTelegram: boolean;
   enviarSMS: boolean;
+  enviarWhatsApp: boolean;
   envios?: Envio[];
 }
 
@@ -253,7 +258,20 @@ function RecordatoriosSection({ recordatorios, cargar }: { recordatorios: Record
 }
 
 function ModalRecordatorio({ recordatorio, cerrar, cargar }: { recordatorio: Recordatorio | null; cerrar: () => void; cargar: () => void }) {
-  const [data, setData] = useState({ nombre: recordatorio?.nombre || '', correo: recordatorio?.correo || '', fechaRecordatorio: recordatorio?.fechaRecordatorio?.split('T')[0] || '', asunto: recordatorio?.asunto || '', mensaje: recordatorio?.mensaje || '', telegramId: recordatorio?.telegramId || '', numeroTelefono: recordatorio?.numeroTelefono || '', enviarEmail: recordatorio?.enviarEmail ?? true, enviarTelegram: recordatorio?.enviarTelegram ?? false, enviarSMS: recordatorio?.enviarSMS ?? false });
+  const [data, setData] = useState({
+    nombre: recordatorio?.nombre || '',
+    correo: recordatorio?.correo || '',
+    fechaRecordatorio: recordatorio?.fechaRecordatorio?.split('T')[0] || '',
+    asunto: recordatorio?.asunto || '',
+    mensaje: recordatorio?.mensaje || '',
+    telegramId: recordatorio?.telegramId || '',
+    numeroTelefono: recordatorio?.numeroTelefono || '',
+    enviarEmail: recordatorio?.enviarEmail ?? true,
+    enviarTelegram: recordatorio?.enviarTelegram ?? false,
+    enviarSMS: recordatorio?.enviarSMS ?? false,
+    enviarWhatsApp: recordatorio?.enviarWhatsApp ?? false,
+    fechaHora: recordatorio?.fechaRecordatorio ? recordatorio.fechaRecordatorio.split('T')[1]?.substring(0, 5) || '09:00' : '09:00'
+  });
   const [saving, setSaving] = useState(false);
 
   const guardar = async () => {
@@ -287,11 +305,16 @@ function ModalRecordatorio({ recordatorio, cerrar, cargar }: { recordatorio: Rec
               </div>
               <div><label className="block text-sm text-neutral-400 mb-2">Teléfono SMS</label><input value={data.numeroTelefono} onChange={e => setData({ ...data, numeroTelefono: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" placeholder="+521234567890" /></div>
             </div>
-            <div><label className="block text-sm text-neutral-400 mb-3">Canales</label><div className="flex flex-wrap gap-4">
+            <div><label className="block text-sm text-neutral-400 mb-3">Canales</label><div className="flex flex-wrap gap-3">
               <label className="flex items-center gap-3 cursor-pointer px-4 py-3 bg-neutral-900 rounded-xl border border-neutral-800 hover:border-blue-500/30"><input type="checkbox" checked={data.enviarEmail} onChange={e => setData({ ...data, enviarEmail: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><Mail className="w-5 h-5 text-blue-400" /><span>Email</span></label>
               <label className="flex items-center gap-3 cursor-pointer px-4 py-3 bg-neutral-900 rounded-xl border border-neutral-800 hover:border-cyan-500/30"><input type="checkbox" checked={data.enviarTelegram} onChange={e => setData({ ...data, enviarTelegram: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><MessageSquare className="w-5 h-5 text-cyan-400" /><span>Telegram</span></label>
               <label className="flex items-center gap-3 cursor-pointer px-4 py-3 bg-neutral-900 rounded-xl border border-neutral-800 hover:border-green-500/30"><input type="checkbox" checked={data.enviarSMS} onChange={e => setData({ ...data, enviarSMS: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><Phone className="w-5 h-5 text-green-400" /><span>SMS</span></label>
-            </div></div>
+              <label className="flex items-center gap-3 cursor-pointer px-4 py-3 bg-neutral-900 rounded-xl border border-neutral-800 hover:border-emerald-500/30"><input type="checkbox" checked={data.enviarWhatsApp} onChange={e => setData({ ...data, enviarWhatsApp: e.target.checked })} className="w-5 h-5 accent-amber-500 rounded" /><MessageSquare className="w-5 h-5 text-emerald-400" /><span>WhatsApp</span></label>
+            </div>
+            {data.enviarWhatsApp && (
+              <p className="text-xs text-emerald-400 mt-2">✓ WhatsApp se enviará al número configurado en Ajustes (CallMeBot)</p>
+            )}
+            </div>
             <div className="flex gap-3 pt-4"><button onClick={cerrar} className="flex-1 py-3 bg-neutral-800 rounded-xl font-medium hover:bg-neutral-700">Cancelar</button><button onClick={guardar} disabled={saving} className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl disabled:opacity-50">{saving ? 'Guardando...' : 'Guardar'}</button></div>
           </div>
         </div>
@@ -339,18 +362,48 @@ function HistorialSection() {
 }
 
 function ConfigSection({ config, cargar }: { config: Config | null; cargar: () => void }) {
-  const [data, setData] = useState({ gmailEmail: '', gmailPassword: '', gmailActivo: false, telegramBotToken: '', telegramActivo: false, twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '', smsActivo: false, horaEjecucion: '09:00' });
+  const [data, setData] = useState({
+    gmailEmail: '',
+    gmailPassword: '',
+    gmailActivo: false,
+    telegramBotToken: '',
+    telegramActivo: false,
+    twilioAccountSid: '',
+    twilioAuthToken: '',
+    twilioPhoneNumber: '',
+    smsActivo: false,
+    horaEjecucion: '09:00',
+    // CallMeBot (WhatsApp)
+    callmebotApiKey: '',
+    callmebotPhone: '',
+    callmebotActivo: false
+  });
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
     if (config) {
-      setData({ gmailEmail: config.gmailEmail || '', gmailPassword: '', gmailActivo: config.gmailActivo, telegramBotToken: '', telegramActivo: config.telegramActivo, twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: config.twilioPhoneNumber || '', smsActivo: config.smsActivo, horaEjecucion: config.horaEjecucion || '09:00' });
-      // Mostrar info de debug
+      setData({
+        gmailEmail: config.gmailEmail || '',
+        gmailPassword: '',
+        gmailActivo: config.gmailActivo,
+        telegramBotToken: '',
+        telegramActivo: config.telegramActivo,
+        twilioAccountSid: '',
+        twilioAuthToken: '',
+        twilioPhoneNumber: config.twilioPhoneNumber || '',
+        smsActivo: config.smsActivo,
+        horaEjecucion: config.horaEjecucion || '09:00',
+        // CallMeBot
+        callmebotApiKey: '',
+        callmebotPhone: config.callmebotPhone || '',
+        callmebotActivo: config.callmebotActivo || false
+      });
       setDebugInfo({
         gmailPasswordLength: (config as any)._debug_gmailPasswordLength,
-        telegramTokenLength: (config as any)._debug_telegramTokenLength
+        telegramTokenLength: (config as any)._debug_telegramTokenLength,
+        callmebotApiKeyLength: (config as any)._debug_callmebotApiKeyLength
       });
     }
   }, [config]);
@@ -481,6 +534,92 @@ function ConfigSection({ config, cargar }: { config: Config | null; cargar: () =
         <div className="space-y-4">
           <div><label className="block text-sm text-neutral-400 mb-2">Bot Token {config?.telegramConfigurado && <span className="text-green-400 text-xs">(vacío = mantener)</span>}</label><input type="password" placeholder="123456789:ABC..." value={data.telegramBotToken} onChange={e => setData({ ...data, telegramBotToken: e.target.value })} className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-amber-500/50" /></div>
           <button onClick={probarTelegram} disabled={testing === 'telegram'} className="px-5 py-2.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl hover:bg-cyan-500/20 disabled:opacity-50 text-sm font-medium">{testing === 'telegram' ? 'Enviando...' : 'Probar Telegram'}</button>
+        </div>
+      </div>
+
+      {/* WhatsApp (CallMeBot) - GRATIS */}
+      <div className="bg-gradient-to-r from-emerald-500/10 to-green-500/10 rounded-2xl p-6 border border-emerald-500/20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-emerald-500/20 rounded-xl">
+              <MessageSquare className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg">WhatsApp</h3>
+              <p className="text-sm text-neutral-400">CallMeBot - ¡GRATIS!</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            {config?.callmebotConfigurado && (
+              <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-3 py-1 rounded-full">
+                <Check className="w-3 h-3" /> Guardado
+              </span>
+            )}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={data.callmebotActivo} 
+                onChange={e => setData({ ...data, callmebotActivo: e.target.checked })} 
+                className="w-5 h-5 accent-amber-500 rounded" 
+              />
+              <span className="text-sm">Activo</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Instrucciones */}
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 mb-4">
+          <p className="text-sm text-emerald-300 font-medium mb-2">📱 Cómo configurar CallMeBot:</p>
+          <ol className="text-sm text-neutral-300 space-y-1 list-decimal list-inside">
+            <li>Agrega el número <strong>+34 644 36 68 88</strong> a tus contactos</li>
+            <li>Envía un mensaje a ese número por WhatsApp</li>
+            <li>El bot te responderá con tu <strong>API Key</strong></li>
+            <li>Copia y pega el API Key aquí</li>
+          </ol>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-neutral-400 mb-2">
+              API Key {config?.callmebotConfigurado && <span className="text-green-400 text-xs">(vacío = mantener)</span>}
+            </label>
+            <input 
+              type="password" 
+              placeholder="4020302" 
+              value={data.callmebotApiKey} 
+              onChange={e => setData({ ...data, callmebotApiKey: e.target.value })} 
+              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-emerald-500/50" 
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-neutral-400 mb-2">Número de teléfono</label>
+            <input 
+              placeholder="584249388632" 
+              value={data.callmebotPhone} 
+              onChange={e => setData({ ...data, callmebotPhone: e.target.value })} 
+              className="w-full px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-xl outline-none focus:border-emerald-500/50" 
+            />
+            <p className="text-xs text-neutral-500 mt-1">Código de país + número (sin + ni espacios)</p>
+          </div>
+          <button 
+            onClick={async () => {
+              setTesting('whatsapp');
+              try {
+                const res = await fetch('/api/enviar', { 
+                  method: 'POST', 
+                  headers: { 'Content-Type': 'application/json' }, 
+                  body: JSON.stringify({ tipo: 'testWhatsApp' }) 
+                });
+                const d = await res.json();
+                alert(d.success ? '✅ WhatsApp enviado!' : `❌ Error: ${d.error}`);
+              } catch { alert('Error'); }
+              finally { setTesting(null); }
+            }} 
+            disabled={testing === 'whatsapp'} 
+            className="px-5 py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/20 disabled:opacity-50 text-sm font-medium"
+          >
+            {testing === 'whatsapp' ? 'Enviando...' : 'Probar WhatsApp'}
+          </button>
         </div>
       </div>
 

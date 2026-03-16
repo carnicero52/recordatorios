@@ -33,6 +33,12 @@ export async function GET() {
       smsActivo: config.smsActivo,
       smsConfigurado: !!(config.twilioAccountSid && config.twilioAuthToken),
       twilioPhoneNumber: config.twilioPhoneNumber || '',
+
+      // WhatsApp (CallMeBot) - GRATIS
+      callmebotActivo: config.callmebotActivo,
+      callmebotPhone: config.callmebotPhone || '',
+      callmebotConfigurado: !!(config.callmebotApiKey && config.callmebotPhone),
+      _debug_callmebotApiKeyLength: config.callmebotApiKey?.length || 0,
     });
   } catch (error) {
     console.error('Error GET config:', error);
@@ -65,6 +71,9 @@ export async function PATCH(request: Request) {
       telegramActivo: data.telegramActivo,
       smsActivo: data.smsActivo,
       twilioPhoneNumber: data.twilioPhoneNumber,
+      // CallMeBot (WhatsApp GRATIS)
+      callmebotActivo: data.callmebotActivo,
+      callmebotPhone: data.callmebotPhone,
     };
 
     // Solo actualizar contraseñas/tokens si vienen con valor NO vacío
@@ -90,6 +99,15 @@ export async function PATCH(request: Request) {
     }
     if (data.twilioAuthToken?.trim()) {
       updateData.twilioAuthToken = data.twilioAuthToken.trim();
+    }
+
+    // CallMeBot API Key
+    const callmebotApiKey = data.callmebotApiKey?.trim();
+    if (callmebotApiKey && callmebotApiKey.length > 0) {
+      updateData.callmebotApiKey = callmebotApiKey;
+      console.log('✅ Se actualizará callmebotApiKey (' + callmebotApiKey.length + ' caracteres)');
+    } else {
+      console.log('⏭️ No se actualizará callmebotApiKey (vacío o no enviado)');
     }
 
     console.log('📝 Campos a actualizar:', Object.keys(updateData));
