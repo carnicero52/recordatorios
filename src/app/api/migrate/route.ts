@@ -32,6 +32,55 @@ export async function GET() {
       }
     }
 
+    // Agregar columnas de CallMeBot si no existen
+    result.steps.push('Verificando columnas de CallMeBot...');
+
+    try {
+      await db.$executeRaw`ALTER TABLE "Configuracion" ADD COLUMN IF NOT EXISTS "callmebotApiKey" TEXT`;
+      result.steps.push('✅ Columna callmebotApiKey agregada');
+    } catch (e: any) {
+      if (e.message.includes('already exists')) {
+        result.steps.push('✅ Columna callmebotApiKey ya existe');
+      } else {
+        result.steps.push('⚠️ callmebotApiKey: ' + e.message);
+      }
+    }
+
+    try {
+      await db.$executeRaw`ALTER TABLE "Configuracion" ADD COLUMN IF NOT EXISTS "callmebotPhone" TEXT`;
+      result.steps.push('✅ Columna callmebotPhone agregada');
+    } catch (e: any) {
+      if (e.message.includes('already exists')) {
+        result.steps.push('✅ Columna callmebotPhone ya existe');
+      } else {
+        result.steps.push('⚠️ callmebotPhone: ' + e.message);
+      }
+    }
+
+    try {
+      await db.$executeRaw`ALTER TABLE "Configuracion" ADD COLUMN IF NOT EXISTS "callmebotActivo" BOOLEAN NOT NULL DEFAULT false`;
+      result.steps.push('✅ Columna callmebotActivo agregada');
+    } catch (e: any) {
+      if (e.message.includes('already exists')) {
+        result.steps.push('✅ Columna callmebotActivo ya existe');
+      } else {
+        result.steps.push('⚠️ callmebotActivo: ' + e.message);
+      }
+    }
+
+    // Agregar columna enviarWhatsApp a Recordatorio
+    result.steps.push('Verificando columna enviarWhatsApp en Recordatorio...');
+    try {
+      await db.$executeRaw`ALTER TABLE "Recordatorio" ADD COLUMN IF NOT EXISTS "enviarWhatsApp" BOOLEAN NOT NULL DEFAULT false`;
+      result.steps.push('✅ Columna enviarWhatsApp agregada');
+    } catch (e: any) {
+      if (e.message.includes('already exists')) {
+        result.steps.push('✅ Columna enviarWhatsApp ya existe');
+      } else {
+        result.steps.push('⚠️ enviarWhatsApp: ' + e.message);
+      }
+    }
+
     // Verificar admin
     const admin = await db.admin.findFirst();
     result.admin = admin ? {
