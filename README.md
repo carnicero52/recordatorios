@@ -118,3 +118,4 @@ DIRECT_URL="postgresql://usuario:password@ep-xxx.neon.tech/barbershop?sslmode=re
 ## 📝 Licencia
 
 MIT
+
